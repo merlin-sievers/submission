@@ -6,3 +6,10 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
+/angrProject.iml
+/misc.xml
+/modules.xml
+/encodings.xml
+/profiles_settings.xml
+/vcs.xml
+/inspectionProfiles/profiles_settings.xml
