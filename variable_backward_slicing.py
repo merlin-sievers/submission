@@ -95,6 +95,7 @@ class VariableBackwardSlicing(BackwardSlice):
         :param targets: A list of tuples like (cfg_node, stmt_idx), where cfg_node is a CFGNode instance where the
                         backward slice starts, and it must be included in CFG and CDG. stmt_idx is the ID of the target
                         statement where the backward slice starts.
+        :param var:     The variable to slice on.
         """
         print("Erste variable", var)
         self._worklist(targets, var)
@@ -150,15 +151,21 @@ class VariableBackwardSlicing(BackwardSlice):
         for start in starts:
             worklist.add(start)
 
+
+        self.taint_graph = networkx.DiGraph()
+
         # Initialize variables (abstract State)
         variables = set()
         variables.add(var)
+
+        accessed_taints = set()
 
         while worklist:
             node = worklist.pop()
             # y = f_i(x_1,..., x_n)
             # node = CodeLocation(node[0].addr, node[1])
             print("Worklist remove", node)
+            accessed_taints.add(node)
             variables = self._constraint_function(node, variables)
             if variables:
                 # Add all predecessors to the worklist
@@ -173,4 +180,16 @@ class VariableBackwardSlicing(BackwardSlice):
                         print("Worklist Add", p)
                         worklist.add(p)
 
+                        self.taint_graph.add_edge(p, node)
+
+                for n in self._cfg.model.get_all_nodes(node.block_addr):
+                    new_taints = self._handle_control_dependence(n)
+
+                    for taint in new_taints:
+                        if taint not in accessed_taints:
+                            worklist.add(taint)
+
+                        self.taint_graph.add_edge(taint, node)
+
+        self._map_to_cfg()
         print(self.chosen_statements)

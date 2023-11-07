@@ -1,5 +1,5 @@
 from collections import defaultdict
-
+from angrutils import *
 import angr, monkeyhex, archinfo
 import logging
 import claripy
@@ -28,18 +28,29 @@ target_block.vex.pp()
 
 
 # Building the CFGEmulated for the target function in order to be able to build the DDG
-cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs,
-                                   context_sensitivity_level=2, starts=[target_function.rebased_addr])
+cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=0, starts=[target_function.rebased_addr])
+print(cfg.graph.size())
+# refs = project.analyses.XRefs(func=target_function.rebased_addr)
 
-nodes = cfg.get_all_nodes(target_block.addr)
-for node in nodes:
-    print("1")
-    if(node.addr == target_block.addr):
-        print("Found node", node.addr, node.irsb)
+# print(refs.kb.xrefs.xrefs_by_ins_addr)
 
-
-# Getting the DDG
+# cfg.normalize()
+# vfg = project.analyses.VSA_DDG(start_addr=target_function.rebased_addr)
+# print(vfg.graph.size())
+# for node in vfg.graph.nodes:
+#     print(node, type(node))
+#
+# plot_cfg(cfg, fname="png_check_keyword_normalized", asminst=True, remove_imports=True, remove_path_terminator=True)
+#
+#
+# # Getting the DDG
 ddg = project.analyses.DDG(cfg, start=target_function.rebased_addr)
+#
+# plot_ddg_data(ddg.data_sub_graph(), fname="png_check_keyword_ddg", asminst=False)
+
+for node in ddg.data_graph.nodes:
+    if node.location.ins_addr == 0x4049fb:
+        print("found", node.variable, node.location)
 
 # CodeLocations are part of the DDG
 cl1 = CodeLocation(0x4049f5, ins_addr=0x4049fb, stmt_idx=19)
@@ -51,19 +62,21 @@ for definition in definitions:
     pv = definition._variable
     print(type(definition))
     print(definition._variable, definition.depends_on)
-    # Now only take the register variables
+#     Now only take the register variables
     if isinstance(definition._variable.variable, SimRegisterVariable):
         var = definition._variable.variable
         print(var)
         print(var.loc_repr(arch=project.arch))
 
 block = project.factory.block(addr=0x4049fb)
-print("target addres", target_block.addr)
+print("target address", target_block.addr)
+
+
 
 # Take all definitions of a variable that appear in the DDG
-found: list = ddg.find_definitions(var, simplified_graph=False)
+# found: list = ddg.find_definitions(var, simplified_graph=False)
 # node = cfg.get_any_node(0x4049f5)
-print("cl1", cl1.block_addr, cl1.ins_addr, cl1.stmt_idx)
+# print("cl1", cl1.block_addr, cl1.ins_addr, cl1.stmt_idx)
 # if cl1 in ddg.graph.nodes:
 #     print("YES!!!")
 # for n in ddg.graph.nodes:
@@ -111,6 +124,15 @@ cdg = project.analyses.CDG(cfg, start=target_function.rebased_addr)
 
 #
 #
-print("input", var)
+# print("input", var)
 bs = VariableBackwardSlicing(cfg, cdg=cdg, ddg=ddg, variable=var, project=project, targets=loc)
+
+for ins in bs.chosen_statements:
+    print(type(ins))
 print(bs.dbg_repr())
+#
+# nodes = bs._cfg.get_all_nodes(addr=0x4049f5)
+#
+# plot_cfg(bs._cfg, fname="png_check_keyword_bs", asminst=True, remove_imports=True, remove_path_terminator=True)
+#
+# print("hello")
