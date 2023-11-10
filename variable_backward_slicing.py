@@ -80,6 +80,9 @@ class VariableBackwardSlicing(BackwardSlice):
         self.chosen_statements = defaultdict(set)
         # IDs for all chosen exit statements as well as their corresponding targets
         self.chosen_exits = defaultdict(list)
+        # Address of all chosen statements for each SimRun
+        self.chosen_statements_addrs = set()
+
 
         if not no_construct:
             self._construct_default(self._targets, variable)
@@ -124,6 +127,7 @@ class VariableBackwardSlicing(BackwardSlice):
                     if vars == definition.variable:
                         vars_to_remove.add(vars)
                         self._pick_statement(cl.block_addr, cl.stmt_idx)
+                        self.chosen_statements_addrs.add(cl.ins_addr)
                         for dep_def in self._ddg.view[cl.ins_addr].definitions:
                             if dep_def._variable.variable == vars:
                                 for var_dep in dep_def.depends_on:
@@ -182,14 +186,14 @@ class VariableBackwardSlicing(BackwardSlice):
 
                         self.taint_graph.add_edge(p, node)
 
-                for n in self._cfg.model.get_all_nodes(node.block_addr):
-                    new_taints = self._handle_control_dependence(n)
-
-                    for taint in new_taints:
-                        if taint not in accessed_taints:
-                            worklist.add(taint)
-
-                        self.taint_graph.add_edge(taint, node)
+                # for n in self._cfg.model.get_all_nodes(node.block_addr):
+                #     new_taints = self._handle_control_dependence(n)
+                #
+                #     for taint in new_taints:
+                #         if taint not in accessed_taints:
+                #             worklist.add(taint)
+                #
+                #         self.taint_graph.add_edge(taint, node)
 
         self._map_to_cfg()
         print(self.chosen_statements)
