@@ -22,17 +22,18 @@ project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto
 # Getting the target function
 target_function = project.loader.find_symbol("png_check_keyword")
 
+
 # Getting the target block to be able to manually verify the backward slicing
 target_block = project.factory.block(addr=0x4049f5)
 target_block.vex.pp()
 
 
 # Building the CFGEmulated for the target function in order to be able to build the DDG
-cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=0, starts=[target_function.rebased_addr])
-# cfg = project.analyses.CFGFast(start=target_function.rebased_addr, end=target_function.rebased_addr+0x10)
-print(cfg.graph.size())
-# refs = project.analyses.XRefs(func=target_function.rebased_addr)
+# cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=0, starts=[target_function.rebased_addr])
+cfg = project.analyses.CFGFast(start=target_function.rebased_addr, end=target_function.rebased_addr+460)
 
+
+# refs = project.analyses.XRefs(func=target_function.rebased_addr)
 # print(refs.kb.xrefs.xrefs_by_ins_addr)
 
 # cfg.normalize()
@@ -42,6 +43,9 @@ print(cfg.graph.size())
 #     print(node, type(node))
 #
 plot_cfg(cfg, fname="png_check_keyword_fast", asminst=True, remove_imports=True, remove_path_terminator=True)
+
+print(cfg.graph.size())
+
 #
 #
 # # Getting the DDG

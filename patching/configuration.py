@@ -36,14 +36,10 @@ class Config:
             query = """""
             SELECT basicblock.address1, basicblock.address2, count(basicblockid)
             FROM basicblock
-            JOIN instruction ON basicblockid = basicblock.id
-            WHERE functionid = ?  
+            JOIN instruction ON basicblockid = basicblock.id 
             GROUP BY basicblockid;
             """""
-
-            # Replace 'your_function_id' with the actual function ID you want to query
-            function_id = "your_function_id"
-            cursor.execute(query, (function_id,))
+            cursor.execute(query)
 
             # Fetch the results
             result_set = cursor.fetchall()
@@ -51,7 +47,8 @@ class Config:
             # Process the results
             for row in result_set:
                 address1, address2, count = row
-                print(f"Address1: {address1}, Address2: {address2}, Count: {count}")
+
+            return result_set
 
         except sqlite3.Error as e:
             print("SQLite error:", e)
