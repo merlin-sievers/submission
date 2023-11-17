@@ -31,7 +31,7 @@ class Matcher:
                             self.matchOldAddress[node.addr] = address2
                             self.matchNewAddress[address2] = node.addr
 
-    def getNotMatchedBlocks(self, project, entryPoint, end):
+    def get_not_matched_blocks(self, project, entryPoint, end):
         notMatchedBlocks = []
         nodes = list(filter(lambda node: entryPoint <= node.addr <= end, project.cfg.graph.nodes))
         for block in nodes:
@@ -54,7 +54,7 @@ class RefMatcher:
         self.matchFromNewAddress = dict()
 
 
-    def matchReferencesFromPerfectMatchedBlocks(self, perfectMatches, refs):
+    def match_references_from_perfect_matched_blocks(self, perfectMatches, refs):
         # TODO: Match References if they are in a perfectly matched BasicBlock in the Function and outside of the Function
         for match in perfectMatches:
             for ref in refs:

@@ -1,14 +1,34 @@
+import re
+
 import angr
 
 from patcherex.patches import *
+
+import variable_backward_slicing
 from patching.matcher import Matcher
 from patching.matcher import RefMatcher
 from patcherex.backends.detourbackend import DetourBackend
 
+from patching.section_extender import SectionExtender
+
+
 class Patching:
     def __init__(self, patching_config):
+
         self.patching_config = patching_config
-        self.backend = none
+        self.backend = None
+        self.writing_address = None
+        # TODO: Add path to the binary as an argument for the configuration
+        self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs=False)
+        self.cfg_vuln = self.project_vuln.analyses.CFGFast()
+        self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
+        self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size
+
+        self.project_patch = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs=False)
+        self.cfg_patch = self.project_patch.analyses.CFGFast()
+        self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
+        self.end_patch = self.entry_point_patch + self.project_patch.loader.find_symbol(self.patching_config.functionName).size
+
 
     def patch(self, binary_fname, patch_list, output_fname):
         """
@@ -17,20 +37,6 @@ class Patching:
         :param output_fname: path to the patched binary
         :return:
         """
-        # TODO: Add path to the binary as an argument for the configuration
-        self.patching_config.start()
-
-        # Find entry point of vulnerable function
-        project_vuln = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs=False)
-        cfg_vuln = project_vuln.analyses.CFGFast()
-        entryPoint_vuln = project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
-        end_vuln = entryPoint_vuln + project_vuln.loader.find_symbol(self.patching_config.functionName).size
-
-
-        project_patch = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs=False)
-        cfg_patch = project_patch.analyses.CFGFast()
-        entryPoint_patch = project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
-        end_patch = entryPoint_patch + project_patch.loader.find_symbol(self.patching_config.functionName).size
 
         # TODO: Translate to python WARNING: Before beginning with patch check if lr has been pushed to the stack
         # if (!(vulnerableProgram.getListing().getCodeUnitAt(entryPoint_vuln).toString().contains(
@@ -38,125 +44,290 @@ class Patching:
         # printf("\n\t WARNING LR NOT PUSHED TO STACK");
         # }
 
-
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
-        perfectMatches = Matcher(cfg_vuln, cfg_patch)
+        perfect_matches = Matcher(self.cfg_vuln, self.cfg_patch)
 
         # Getting all References from both the vulnerable Program and the patch Program
-        matchedRefs = RefMatcher()
-        refs = matchedRefs.get_refs(True)
-        # Match all References
-        matchedRefs.matchReferencesFromPerfectMatchedBlocks(perfectMatches, refs)
+        matched_refs = RefMatcher()
+        refs = matched_refs.get_refs(True)
 
+        # Match all References
+        matched_refs.match_references_from_perfect_matched_blocks(perfect_matches, refs)
 
         # Preparation for writing the Patch in the vulnerable Version
 
-        vulnerableBlocks = perfectMatches.getNotMatchedBlocks(project_vuln, entryPoint_vuln, end_vuln)
-        patchBlocks = perfectMatches.getNotMatchedBlocks(project_patch, entryPoint_patch, end_patch)
+        vulnerable_blocks = perfect_matches.get_not_matched_blocks(self.project_vuln, self.entry_point_vuln, self.end_vuln)
+        patch_blocks = perfect_matches.get_not_matched_blocks(self.project_patch, self.entry_point_patch, self.end_patch)
 
-        start_address_of_patch = min(vulnerableBlocks)
+        start_address_of_patch = min(vulnerable_blocks)
 
-        codeBlockStart = project_vuln.factory.block(start_address_of_patch)
-        codeBlockEnd = project_vuln.factory.block(max(vulnerableBlocks))
+        code_block_start = self.project_vuln.factory.block(start_address_of_patch)
+        code_block_end = self.project_vuln.factory.block(max(vulnerable_blocks))
 
-        patch_start_address_of_patch = min(patchBlocks)
+        patch_start_address_of_patch = min(patch_blocks)
 
-        patchCodeBlockStart = project_patch.factory.block(patch_start_address_of_patch)
-        patchCodeBlockEnd = project_patch.factory.block(max(patchBlocks))
-
+        patchCodeBlockStart = self.project_patch.factory.block(patch_start_address_of_patch)
+        patch_code_block_end = self.project_patch.factory.block(max(patch_blocks))
 
         # Start of the actual patching:
 
         # Create a new memory section to write the patch into
-        # CURRENTLY: We just write the patch at the end of the elf file.
-        # TODO: Integrate pacherex properly
-        self.backend = DetourBackend("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0")
-        patches = []
+        # CURRENTLY: We try to use lief to extend the last section of the LOAD segment
 
-        new_memory_address = len(self.backend.ocontent)
-        uninitialized_data = b"\x00\x00\x00\x00"*100
-        patches.append(RawFilePatch(new_memory_address, uninitialized_data))
-        self.backend.apply_patches(patches)
+        file_to_be_patched = SectionExtender(binary_fname, 1024)
 
-        patches = []
+        self.backend = DetourBackend(file_to_be_patched)
+        new_memory_address = self.project_vuln.loader.main_object.segments[0].vaddr + self.project_vuln.loader.main_object.segments[0].memsize
 
         # Jump to new Memory
         self.jump_to_new_memory(new_memory_address, start_address_of_patch)
 
-        Address pCBStart = patchCodeBlockStart.getFirstStartAddress();
+        self.cfg_patch.get_any_node(patch_start_address_of_patch)
 
-        cfg_patch.get_any_node(patch_start_address_of_patch)
+        patch_block_start_address = patch_start_address_of_patch
+        vuln_block_start_address = start_address_of_patch
 
-        while (pCBStart.compareTo(patchCodeBlockEnde.getFirstStartAddress().next()) == -1):
-            # TODO: Check what happens to the project after patching
-            # Assumption CodeUnitIterator stable even if listing gets modified
+        self.writing_address = new_memory_address
 
+        while patch_block_start_address < patch_code_block_end.addr:
+            block_patch = self.project_patch.factory.block(patch_block_start_address)
 
-            CodeUnitIterator codeUnitIterator = listing.getCodeUnits(codeBlockStart, true)
+            # Going through every CodeUnit from the BasicBlock
+            for instruction_patch in block_patch.instructions:
 
-             # Going through every CodeUnit from the BasicBlock
-            for(codeUnitIteratorneu = listingneu.getCodeUnits(patchCodeBlockStart, true); CodeUnitIteratorneu.hasNext(); ){
+                # Implement the following to use Angr References
 
-                codunneu = codeUnitIteratorneu.next()
-                #  Rewriting of  patch codeUnit to the vulnerable Version, if it is not part of a perfectly matched Block
-
-                codun = codeUnitIterator.next()
-                if (next == null):
-                    next = patchMemory.freeAddress
-                codunaddr = next
-
-
-            	# Implement the following to use Angr References
-                Reference[] datref = getAngrReference(codunneu)
+                reference = self.get_references_from_instruction(instruction_patch, refs)
 
                 # Handling of possible References
-                if(datref.length >0):
-                    handleReferences(datref, refs, codun, codunneu, ldrAddress)
+                if reference is not None:
+                    self.handle_references(reference, refs, instruction_vuln, instruction_patch)
                 else:
-                    rewritingBytesofCodeUnitToNewAddress(codunneu, codunaddr)
-                    next = codunaddr.add(codunneu.getLength())
+                    self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch)
+                    self.writing_address = self.writing_address + instruction_patch.size
 
-                codeBlockStart = basicBlockModelOld.getCodeBlockAt(codeBlockStart.getMaxAddress().next(), monitor)
+                patch_block_start_address = patch_block_start_address + block_patch.size
 
-                patchCodeBlockStart = basicBlockModelNew.getCodeBlockAt(patchCodeBlockStart.getMaxAddress().next(), monitor)
-
-                if (patchCodeBlockStart == null):
-                    pCBStart = patchCodeBlockEnde.getMaxAddress()
-                else:
-                    pCBStart = patchCodeBlockStart.getFirstStartAddress()
-
-                # Set the End for the last ShiftZone
-                shiftsAscending.get(shiftsAscending.size()-1).end = next
-                shiftsDescending.get(shiftsDescending.size()-1).end = next
-
-                # Fix all References broken by shifts
-                fixShiftsInReferences()
-
-                # // Jump back to the original function since the patch is now integrated
-
-                if (!(next.subtract(codeBlockEnde.getMaxAddress().next()) % 4 == 0)):
-                    byte[] test = new byte[2]
-                    test[0] = (byte) 0x00
-                    test[1] = (byte) 0xbf
-
-                asmVuln.patchProgram(test, next)
-                Disassembler disasm = Disassembler.getDisassembler(vulnerableProgram, monitor, null)
-
-                # Disassemble correctly in ArmThumbMode
-                clearListing(next, next.add(2))
-                ArmDisassembleCommand arws = new ArmDisassembleCommand(next, new AddressSet(next), true)
-                arws.applyTo(vulnerableProgram)
-                disasm.disassemble(next, new AddressSet(next))
-
-                next = next.add(2)
-
-                clearListing(next, next.add(4))
-                asmVuln.assemble(next, "bl 0x" + codeBlockEnde.getMaxAddress().next())
-
+    #
+    #    # Set the End for the last ShiftZone
+    #    shiftsAscending.get(shiftsAscending.size()-1).end = next
+    #    shiftsDescending.get(shiftsDescending.size()-1).end = next
+    #
+    #    # Fix all References broken by shifts
+    #    fixShiftsInReferences()
+    #
+    # # Jump back to the original function since the patch is now integrated
+    #
+    #     if (!(next.subtract(codeBlockEnde.getMaxAddress().next()) % 4 == 0)):
+    #                 byte[] test = new byte[2]
+    #                 test[0] = (byte) 0x00
+    #                 test[1] = (byte) 0xbf
+    #
+    #             asmVuln.patchProgram(test, next)
+    #             Disassembler disasm = Disassembler.getDisassembler(vulnerableProgram, monitor, null)
+    #
+    #
+    #             next = next.add(2)
+    #
+    #             clearListing(next, next.add(4))
+    #             asmVuln.assemble(next, "bl 0x" + codeBlockEnde.getMaxAddress().next())
 
 
     def jump_to_new_memory(self, base_address, target_address):
-        patches = []
+        """
+        Write a branch to target_address instruction at base_address
+        :param base_address: Address of the instruction to be patched
+        :param target_address: Address of the target instruction
+        """
+
         target_address = str(hex(target_address))
-        patches.append(InlinePatch(base_address, "b " + target_address))
+        patches = [InlinePatch(base_address, "b " + target_address)]
         self.backend.apply_patches(patches)
+
+
+    def get_references_from_instruction(self, instruction, refs):
+        """
+        Check if there is a Reference in refs that is from the given instruction
+        :param instruction:
+        :param refs:
+        :return: Reference or None
+        """
+        for ref in refs:
+            if ref.fromAddr == instruction.address:
+                return ref
+            else:
+                return None
+
+    def handle_references(self, reference, refs, matched_refs, instruction_patch):
+        """
+        See if Reference is a matched Address, then use the matched Reference instead
+
+        :param reference:
+        :param refs:
+        :param instruction_vuln:
+        :param instruction_patch:
+        :return:
+        """
+
+        # First check if from Address of Reference is perfectly matched
+        if reference.fromAddr in matched_refs.matchNewAddress:
+            self.handle_matched_from_reference(reference, matched_refs, instruction_patch)
+
+        # Check if the To Address of the Reference is perfectly matched
+        elif reference.toAddr in matched_refs.matchToNewAddress:
+            self.handle_matched_to_reference(refs, reference, instruction_patch)
+
+        # If the Reference is not perfectly matched
+        else:
+            self.add_new_reference()
+
+
+    def rewriting_bytes_of_code_unit_to_new_address(self, instruction, address):
+        """
+        Taking the bytes of an instruction and writing them to the given address
+        :param instruction:
+        :param address:
+        """
+        patches = [RawMemPatch(address, instruction.bytes)]
+        self.backend.apply_patches(patches)
+
+    def handle_read_reference(self, reference, instruction_patch):
+
+        # Tracking Register for later backward slicing and static analysis --> TODO Adapt to python and angr needs
+        # instruction = instruction_vuln
+        #
+        # Register register = new Register();
+        # register.getRegister(instruction);
+
+        # TODO: Difference now assumes there are no more shifts than 32 bytes (pc + 28). That is a random guess.
+
+        difference = reference.toAddr - reference.fromAddr
+        difference = difference + 28
+        # TODO: Check if necessary: Some alignment stuff
+        # if (!(codunaddr.add(difference).getOffset() % 4 == 0)) {
+        # difference = difference + 2;
+        # }
+
+        # Replacing the reference with the new target address
+        new_instruction_string = self.replace_jump_target_address(instruction_patch, difference)
+
+        patches = [InlinePatch(self.writing_address, new_instruction_string)]
+        self.backend.apply_patches(patches)
+
+        # Tracking the address that will be read from
+        # register.setLdrDataAddr(self.writing_address.add(difference + 4 );
+        #
+        # newDefRegisters.put(register.getName(), register);
+
+        self.writing_address = self.writing_address + instruction_patch.size
+
+
+    def handle_offset_reference(self, instruction_patch, old_reference):
+
+        static_analysis = variable_backward_slicing.VariableBackwardSlicing()
+
+        statAna.run(instruction);
+
+        # TODO: Needs to be implemented here again... :(
+        smtSolver = SMTSolver()
+        # Calculate Address where the value of the PARAM reference need to be written
+
+        jump_target = old_reference.toAddr
+
+        # Tracking Registers --> TODO: Need to implement this
+        # Set < String > intersection = new HashSet <> (newDefRegisters.keySet());
+        # intersection.retainAll(statAna.getUsedRegisters().keySet());
+        # List < Register > inputs = new ArrayList < Register > ();
+        # int i = 0;
+        # for (Iterator < String > it = intersection.iterator(); it.hasNext();) {
+        #     inputs.add(newDefRegisters.get(it.next()));
+        #     i++;
+        #     }
+
+        smtResult = smtSolver.run(static_analysis.chosen_statements_addrs, jumpTarget, codunaddr, true, inputs);
+
+        # Calculate bytes of value that needs to be loaded in the previously modified address
+
+        data[p] = (byte) (smtResult.get(0).getValue() >> p * 8)
+
+        setBytes(smtResult.get(0).getLdrDataAddr(), data);
+
+        newDefRegisters.remove(smtResult.get(0).getName());
+
+        replacingADDwithSUB(codunneu);
+
+        self.writing_address = codunaddr.add(codunneu.getLength() * 2);
+
+        self.remember_shifted_bytes(instruction_patch, 2)
+
+
+def handle_control_flow_jump_reference(self):
+        // Check if Reference jumps outside of the patch
+        if (referenceOutsideOfPatch(refs.matchNewAddress.get(datref[0].getFromAddress()).getOldRef().getToAddress(), 0)) {
+
+        // Check if Reference stays inside of the function -- That means it originally might have been a "b target" thumb instruction that needs to be changed
+        if (patchProgram.getListing().getFunctionContaining(datref[0].getFromAddress()).getBody().contains(datref[0].getToAddress())) {
+
+        reassemblingReferenceAtDifferentAddressThumb(codunneu, refs.matchNewAddress.get(datref[0].getFromAddress()).getOldRef().getToAddress());
+        next = codunaddr.add(codunneu.getLength() * 2);
+        rememberShiftedBytes(codunneu, 4);
+
+        // Reference outside of function and outside of patch
+        } else {
+
+        reassemblingReferenceAtDifferentAddress(codunneu, codunaddr, refs.matchNewAddress.get(datref[0].getFromAddress()).getOldRef().getToAddress());
+        printf("\n\t CB outside function");
+        next = codunaddr.add(codunneu.getLength());
+        }
+        // Reference inside of patch
+        } else {
+        rewritingBytesofCodeUnitToNewAddress(codunneu, codunaddr);
+        next = codunaddr.add(codunneu.getLength());
+        }
+        }
+        pass
+
+    def handle_matched_to_reference(self, refs, reference, instruction_patch):
+        pass
+
+    def add_new_reference(self):
+        #
+        # if (referenceOutsideOfPatch(datref[0].getToAddress(), 1)) {
+        #
+        # rewritingAndAddingReferenceToTheOldProgram(datref[0], refs, codunneu, ldrAddress);
+        #
+        # next = codunaddr.add(vulnerableProgram.getListing().getCodeUnitAt(codunaddr).getLength());
+        # printf("\n \t next  %s", next);
+        # } else {
+        # printf("\n \t notMatchedRewritten  %s", codunneu.getLength());
+        # rewritingBytesofCodeUnitToNewAddress(codunneu, codunaddr);
+        # next = codunaddr.add(codunneu.getLength());
+        # }
+        # }
+        # }
+        #
+        # }
+
+    def handle_matched_from_reference(self, reference, matched_refs, instruction_patch):
+        ref_type = reference.refType
+        # Get the old Reference
+        old_reference = matched_refs.matchNewAddress[reference.fromAddr]
+
+        # Depending on the type of the reference there are now different ways to proceed:
+        # First READ reference
+        if ref_type == "read":
+            self.handle_read_reference(old_reference, instruction_patch)
+
+        # Then OFFSET reference
+        elif ref_type == "offset":
+            self.handle_offset_reference()
+
+        # Then CONTROL_FLOW_JUMP reference
+        elif ref_type == "control_flow_jump":
+            self.handle_control_flow_jump_reference()
+
+    def replace_jump_target_address(self, instruction_patch, difference):
+        instruction_string =  instruction_patch.mnemonic + " " + instruction_patch.op_str
+
+        modified_string = re.sub(r'#0x[0-9A-Fa-f]+', "#" + str(hex(difference)), instruction_string)
+        return modified_string
