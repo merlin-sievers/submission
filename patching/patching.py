@@ -1,10 +1,12 @@
 import re
 
 import angr
+from angr.sim_variable import SimRegisterVariable
 
 from patcherex.patches import *
 
 import variable_backward_slicing
+from patching.analysis.backward_slice import VariableBackwardSlicing
 from patching.matcher import Matcher
 from patching.matcher import RefMatcher
 from patcherex.backends.detourbackend import DetourBackend
@@ -29,6 +31,9 @@ class Patching:
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
         self.end_patch = self.entry_point_patch + self.project_patch.loader.find_symbol(self.patching_config.functionName).size
 
+        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_patch])
+        self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
+        self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
 
     def patch(self, binary_fname, patch_list, output_fname):
         """
@@ -93,7 +98,7 @@ class Patching:
             block_patch = self.project_patch.factory.block(patch_block_start_address)
 
             # Going through every CodeUnit from the BasicBlock
-            for instruction_patch in block_patch.instructions:
+            for instruction_patch in block_patch.capstone.insns:
 
                 # Implement the following to use Angr References
 
@@ -224,9 +229,18 @@ class Patching:
 
     def handle_offset_reference(self, instruction_patch, old_reference):
 
-        static_analysis = variable_backward_slicing.VariableBackwardSlicing()
+        # Get Variable defined in instruction and the CodeLocation of the instruction
+        instr_view = self.ddg_patch_specific.view[instruction_patch.addr]
+        definitions: list = instr_view.definitions
+        variable = None
+        location = None
+        for definition in definitions:
+        #     Now only take the register variable
+            if isinstance(definition._variable.variable, SimRegisterVariable):
+                variable = definition._variable.variable
+                location = definition._variable.location
 
-        statAna.run(instruction);
+
 
         # TODO: Needs to be implemented here again... :(
         smtSolver = SMTSolver()
@@ -244,7 +258,13 @@ class Patching:
         #     i++;
         #     }
 
-        smtResult = smtSolver.run(static_analysis.chosen_statements_addrs, jumpTarget, codunaddr, true, inputs);
+        backward_slice = VariableBackwardSlicing(cfg=self.cfge_patch_specific,
+                                                                           ddg=self.ddg_patch_specific,
+                                                                           cdg=self.cdg_patch_specific,
+                                                                           project=self.project_patch,
+                                                                           variable=variable, targets=location)
+
+        smtResult = smtSolver.run(backward_slice.chosen_statements_addrs, jumpTarget, codunaddr, true, inputs);
 
         # Calculate bytes of value that needs to be loaded in the previously modified address
 

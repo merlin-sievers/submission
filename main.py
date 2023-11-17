@@ -29,8 +29,8 @@ target_block.vex.pp()
 
 
 # Building the CFGEmulated for the target function in order to be able to build the DDG
-# cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=0, starts=[target_function.rebased_addr])
-cfg = project.analyses.CFGFast(start=target_function.rebased_addr, end=target_function.rebased_addr+460)
+cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=0, starts=[target_function.rebased_addr])
+# cfg = project.analyses.CFGFast(start=target_function.rebased_addr, end=target_function.rebased_addr+460)
 
 
 # refs = project.analyses.XRefs(func=target_function.rebased_addr)
@@ -42,40 +42,40 @@ cfg = project.analyses.CFGFast(start=target_function.rebased_addr, end=target_fu
 # for node in vfg.graph.nodes:
 #     print(node, type(node))
 #
-plot_cfg(cfg, fname="png_check_keyword_fast", asminst=True, remove_imports=True, remove_path_terminator=True)
+# plot_cfg(cfg, fname="png_check_keyword_fast", asminst=True, remove_imports=True, remove_path_terminator=True)
 
 print(cfg.graph.size())
 
+
+
+# Getting the DDG
+ddg = project.analyses.DDG(cfg, start=target_function.rebased_addr)
 #
-#
-# # Getting the DDG
-# ddg = project.analyses.DDG(cfg, start=target_function.rebased_addr)
-# #
-# # plot_ddg_data(ddg.data_sub_graph(), fname="png_check_keyword_ddg", asminst=False)
-#
-# for node in ddg.data_graph.nodes:
-#     if node.location.ins_addr == 0x4049fb:
-#         print("found", node.variable, node.location)
-#
-# # CodeLocations are part of the DDG
-# cl1 = CodeLocation(0x4049f5, ins_addr=0x4049fb, stmt_idx=19)
-# instr_view = ddg.view[0x4049fb]
-# # Getting variables and their dependencies form the ddg nodes
-# definitions: list = instr_view.definitions
-# var = None
-# for definition in definitions:
-#     pv = definition._variable
-#     print(type(definition))
-#     print(definition._variable, definition.depends_on)
-# #     Now only take the register variables
-#     if isinstance(definition._variable.variable, SimRegisterVariable):
-#         var = definition._variable.variable
-#         print(var)
-#         print(var.loc_repr(arch=project.arch))
-#
-# block = project.factory.block(addr=0x4049fb)
-# print("target address", target_block.addr)
-#
+# plot_ddg_data(ddg.data_sub_graph(), fname="png_check_keyword_ddg", asminst=False)
+
+for node in ddg.data_graph.nodes:
+    if node.location.ins_addr == 0x4049fb:
+        print("found", node.variable, node.location)
+
+# CodeLocations are part of the DDG
+cl1 = CodeLocation(0x4049f5, ins_addr=0x4049fb, stmt_idx=19)
+instr_view = ddg.view[0x4049fb]
+# Getting variables and their dependencies form the ddg nodes
+definitions: list = instr_view.definitions
+var = None
+for definition in definitions:
+    pv = definition._variable
+    print(type(definition))
+    print(definition._variable, definition.depends_on)
+#     Now only take the register variables
+    if isinstance(definition._variable.variable, SimRegisterVariable):
+        var = definition._variable.variable
+        print(var)
+        print(var.loc_repr(arch=project.arch))
+
+block = project.factory.block(addr=0x4049fb)
+print("target address", target_block.addr)
+
 
 
 # Take all definitions of a variable that appear in the DDG

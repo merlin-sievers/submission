@@ -20,6 +20,11 @@ block = project.factory.block(addr)
 block_next = project.factory.block(addr+block.size)
 new_memory_address = project.loader.main_object.segments[0].vaddr + project.loader.main_object.segments[0].memsize
 
+cfg = project.analyses.CFGFast()
+
+
+
+
 instruction_string = block.disassembly.insns[0].mnemonic + " " + block.disassembly.insns[0].op_str
 difference = 100
 modified_string = re.sub(r'#0x[0-9A-Fa-f]+', "#" + str(hex(difference)), instruction_string)
