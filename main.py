@@ -9,6 +9,7 @@ from angr.analyses import BackwardSlice
 from angr.code_location import CodeLocation
 from angr.sim_variable import SimRegisterVariable
 
+from patching.analysis.constraint_solver import ConstraintSolver
 from variable_backward_slicing import VariableBackwardSlicing
 
 # Uncommented to enable logging
@@ -86,12 +87,12 @@ print("target address", target_block.addr)
 #     print("YES!!!")
 # for n in ddg.graph.nodes:
 #     print(n.block_addr, n.ins_addr, n.stmt_idx)
-
-# loc = [cl1]
+#
+loc = [cl1]
 # for founds in found:
 #     loc.append(founds.location)
 # Get the CDG of the target function
-# cdg = project.analyses.CDG(cfg, start=target_function.rebased_addr)
+cdg = project.analyses.CDG(cfg, start=target_function.rebased_addr)
 
 # Getting the backward slice
 # target_node = cfg.get_any_node(target_function.rebased_addr)
@@ -130,7 +131,7 @@ print("target address", target_block.addr)
 #
 #
 # print("input", var)
-# bs = VariableBackwardSlicing(cfg, cdg=cdg, ddg=ddg, variable=var, project=project, targets=loc)
+bs = VariableBackwardSlicing(cfg, cdg=cdg, ddg=ddg, variable=var, project=project, targets=loc)
 #
 # for ins in bs.chosen_statements_addrs:
 #     print(hex(ins))
@@ -141,3 +142,11 @@ print("target address", target_block.addr)
 # plot_cfg(bs._cfg, fname="png_check_keyword_bs", asminst=True, remove_imports=True, remove_path_terminator=True)
 #
 # print("hello")
+
+for stat, ids in bs.chosen_statements.items():
+    print("STATEMENT ", stat)
+    for id in ids:
+        print(id)
+
+constraints = ConstraintSolver(project)
+constraints.solve(bs.chosen_statements, target_block.addr)

@@ -1,8 +1,14 @@
+import pyvex.stmt
+import z3
 
+# TODO: Make sure that SSA transformation is not necessary
 class ConstraintSolver:
     def __init__(self, project):
         self.project = project
-
+        self.ctx = z3.Context()
+        self.solver = z3.Solver()
+        self.variables = []
+        self.results = []
 
     def solve(self, slice, jump_target):
         """
@@ -11,127 +17,110 @@ class ConstraintSolver:
         :param jump_target: The jump target of the Control Flow Graph
         """
 
-        ssaConverter = new SSAConverter()
-        solver = ctx.mkSolver()
-        listVariables = new ArrayList < BitVecExpr > ()
-
-        < Register > results = new ArrayList < Register > ()
-
-        Expr operationExpr = null
         # Iterating over the instruction addresses in the slice
-        for address in slice:
-        #     TODO: Get instruction from somewhere
+        for address, ids in slice.items():
             block = self.project.factory.block(address)
-
+            # Check if the instruction is a thumb instruction
+            if block.thumb:
+                address = address - 1
             # Now iterate over the vex statements of the instruction
-            for stmt in block.vex.statements:
+            for id in ids:
+                statement = block.vex.statements[id]
+                if self.handle_vex_statement(statement, address):
+                    continue
+                else:
+                    break
+
+
+        # Solve equation system so that it jumps to the target
+
+        new_target = z3.BitVecVal(jump_target, 32)
+        print(self.variables)
+        self.solver.add(self.variables[0] == new_target)
+
+        if self.solver.check() == z3.sat:
+        # Get the model
+            print("solvable")
+            model = self.solver.model()
+        # Get the values of variables
+        #     for itReg in inputs:
+        #         relevantRegister = itReg
+            for equation in self.solver.assertions():
+                print("\n\t", equation)
+
+            print(model)
+            for decl in model.decls():
+                print(decl)
+                variable = model.eval(decl(), True)
+                print(variable)
+                # if (decl.getName().toString().equals(relevantRegister.getName()))
+
+        #
+        #             if (isPatchMemory):
+        # #  Need to ADD four since SUB instruction is 4 bit longer than the ADD instruction;
+        #                 subPlusFour = Integer.parseInt(variable.toString())
+        #                 subPlusFour = subPlusFour + 4
+        #
+        #                 relevantRegister.value = subPlusFour
+        #                 results.add(relevantRegister)
+        #             else:
+        #                 relevantRegister.value = Integer.parseInt(variable.toString())
+        #                 results.add(relevantRegister)
+
+    # TODO: Give back the correct format of Results. In what shape do we need the registers? E.g. offset=12 or r1?
+
+    def handle_vex_statement(self, statement, address):
+        if isinstance(statement, pyvex.stmt.IMark):
+            return self._handle_vex_IMark_statement(statement, address)
+        elif isinstance(statement, pyvex.stmt.WrTmp):
+            return self._handle_vex_WrTmp_statement(statement)
+        elif isinstance(statement, pyvex.stmt.Put):
+            return self._handle_vex_Put_statement(statement)
 
 
 
+    def _handle_vex_IMark_statement(self, statement, address):
+        if statement.addr == address:
+            return True
+        else:
+            return False
 
-        switch(parsedPCode.opCode) {
-        case "COPY":
-            printf("\n\t parsedPcode %s", parsedPCode.input[0].variableName);
-
-            operationExpr = makeInputVariable(parsedPCode, listVariables, 0, cfg, writingAddr);
-
-
-            break;
-
-        case
-        "INT_ADD":
-
-        operationExpr = ctx.mkBVAdd(makeInputVariable(parsedPCode, listVariables, 0, cfg, writingAddr),
-                                    makeInputVariable(parsedPCode, listVariables, 1, cfg, writingAddr));
-
-        break;
-
-        case
-        "INT_SUB":
-
-        operationExpr = ctx.mkBVSub(makeInputVariable(parsedPCode, listVariables, 0, cfg, writingAddr),
-                                    makeInputVariable(parsedPCode, listVariables, 1, cfg, writingAddr));
-
-        break;
-
-        }}
-        // BoolExpr
-        equation = ctx.mkEq(operationExpr, makeOutputVariable(parsedPCode, listVariables));
-        // equation.simplify();
-        solver.add(ctx.mkEq(operationExpr, makeOutputVariable(parsedPCode, listVariables)));
-
-        }
-
-        }
-
-        // Solve
-        equation
-        system
-        so
-        that
-        it
-        jumps
-        to
-        the
-        target
-        int
-        jumpTargetInt = Integer.parseInt(jumpTarget.toString(), 16);
-        printf("\n\t  lastVariable %s", listVariables.get(listVariables.size() - 1));
-        solver.add(ctx.mkEq(listVariables.get(listVariables.size() - 1), ctx.mkBV(jumpTargetInt, 32)));
-
-        if (solver.check() == Status.SATISFIABLE)
-        {
-        // Get
-        the
-        model
-        Model
-        model = solver.getModel();
-
-        // Get
-        the
-        values
-        of
-        variables
-        for (BoolExpr equation: solver.getAssertions()) {
-        printf("\n\t %s", equation.toString());
-        }
-
-        for (Iterator < Register > itReg = inputs.iterator();itReg.hasNext();) {
-        Register relevantRegister = itReg.next();
+    def _handle_vex_WrTmp_statement(self, statement):
+        # Handle t1 = GET:I32(r1)
+        if isinstance(statement.data, pyvex.expr.Get):
+            temp = z3.BitVec("t" + str(statement.tmp), 32)
+            register = z3.BitVec("r" + str(statement.data.offset), 32)
+            self.solver.add(temp == register)
+            self.variables.append(register)
+        # Handle t1 = LDle:I32(0x00000)
+        if isinstance(statement.data, pyvex.expr.Load):
+            temp = z3.BitVec("t" + str(statement.tmp), 32)
+            load = z3.BitVec(str(statement.data.addr), 32)
+            self.solver.add(temp == load)
+            self.variables.append(load)
+        # Handle t1 = Add32(t56,0x00000000)
+        if isinstance(statement.data, pyvex.expr.Binop):
+            temp = z3.BitVec("t" + str(statement.tmp), 32)
+            op1 = z3.BitVec(str(statement.data.args[0]), 32)
+            op2 = z3.BitVecVal(statement.data.args[1].con.value, 32)
+            if statement.data.op == "Iop_Add32":
+                self.solver.add(temp == op1 + op2)
+        self.variables.append(temp)
 
 
-        printf("\n\t relevant %s", relevantRegister.getName());
+        return True
 
-        for (FuncDecl decl: model.getDecls()) {
-
-            Expr
-        variable = model.eval(decl.apply(), true);
-        printf("\n\t DeclName %s", decl.getName());
-        if (decl.getName().toString().equals(relevantRegister.getName()))
-        {
-        printf("\n\t integer %s", Integer.parseInt(variable.toString()));
-        if (isPatchMemory) {
-        // Need to ADD four since SUB instruction is 4 bit longer than the ADD instruction;
-        int subPlusFour = Integer.parseInt(variable.toString());
-        subPlusFour = subPlusFour + 4;
-        printf("\n\t subvalue %s", subPlusFour);
-        relevantRegister.value = subPlusFour;
-        results.add(relevantRegister);
-        } else {
-        relevantRegister.value = Integer.parseInt(variable.toString());
-        results.add(relevantRegister);
-        }
-        }
-
-
-        printf("\n\t Solution %s ", (decl.getName() + " = " + variable.toString()));
-        }
-        }
-        } else {
-            System.out.println("No solution found.");
-        }
-        solver.reset();
-        ctx.close();
-        return results;
-
-        }
+    def _handle_vex_Put_statement(self, statement):
+        register = z3.BitVec("r" + str(statement.offset), 32)
+        # Handle Put(offset=12) = t1
+        if isinstance(statement.data, pyvex.expr.RdTmp):
+            variable = z3.BitVec("t" + str(statement.data.tmp), 32)
+        # Handle Put(offset=12) = 0x00000000
+        elif isinstance(statement.data, pyvex.expr.Const):
+            variable = z3.BitVecVal(statement.data.con.value, 32)
+        else:
+            variable = z3.BitVec("t", 32)
+        self.variables.append(register)
+        self.variables.append(variable)
+        self.solver.add(register == variable)
+        return True

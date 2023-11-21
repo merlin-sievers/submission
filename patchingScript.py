@@ -1,3 +1,4 @@
+import pyvex
 from patcherex.backends.detourbackend import DetourBackend
 from patcherex.patches import *
 import angr
@@ -23,7 +24,11 @@ new_memory_address = project.loader.main_object.segments[0].vaddr + project.load
 cfg = project.analyses.CFGFast()
 
 
+block_next.vex.pp()
 
+
+
+expr = block.vex.statements[1]
 
 instruction_string = block.disassembly.insns[0].mnemonic + " " + block.disassembly.insns[0].op_str
 difference = 100
@@ -45,3 +50,4 @@ print(modified_string)
 #
 # print("hallo")
 # backend.save("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0_detoured")
+
