@@ -6,8 +6,8 @@ from patching.configuration import Config
 
 class Matcher:
     def __init__(self, project_vuln, project_patch):
-        self.matchOldAddress = dict()
-        self.matchNewAddress = dict()
+        self.match_old_address = dict()
+        self.match_new_address = dict()
 
         # Get SQLResults
         config = Config()
@@ -19,7 +19,7 @@ class Matcher:
                 address1, address2, count = row
                 if node.addr == address1:
                     node_old = project_patch.cfg.get_any_node(address2)
-                    if node_old.bock.instructions == node.block.instructions:
+                    if node_old.block.instructions == node.block.instructions:
                         i = 0
                         # Going through each individual instruction to check if the mnemonics are the same
                         while i < node.block.instructions:
@@ -28,14 +28,14 @@ class Matcher:
                             else:
                                 i = node.block.instructions + 1
                         if i == node.block.instructions:
-                            self.matchOldAddress[node.addr] = address2
-                            self.matchNewAddress[address2] = node.addr
+                            self.match_old_address[node.addr] = address2
+                            self.match_new_address[address2] = node.addr
 
     def get_not_matched_blocks(self, project, entryPoint, end):
         notMatchedBlocks = []
         nodes = list(filter(lambda node: entryPoint <= node.addr <= end, project.cfg.graph.nodes))
         for block in nodes:
-            if block.addr in self.matchOldAddress:
+            if block.addr in self.match_old_address:
                 pass
             else:
                 notMatchedBlocks.append(block.addr)
@@ -48,25 +48,44 @@ class RefMatcher:
 
     # TODO: Write constructor in a way that it takes the project of the vulnerable and the patched version and gets all the references
     def __init__(self):
-        self.matchToOldAddress = dict()
-        self.matchToNewAddress = dict()
-        self.matchFromOldAddress = dict()
-        self.matchFromNewAddress = dict()
+        self.match_to_old_address = dict()
+        self.match_to_new_address = dict()
+        self.match_from_old_address = dict()
+        self.match_from_new_address = dict()
 
 
-    def match_references_from_perfect_matched_blocks(self, perfectMatches, refs):
+    def match_references_from_perfect_matched_blocks(self, perfectMatches, refs_vuln, refs_patch, project_vuln, project_patch):
         # TODO: Match References if they are in a perfectly matched BasicBlock in the Function and outside of the Function
         for match in perfectMatches:
-            for ref in refs:
-                if ref.fromAddr == match.oldAddress:
-                    self.matchFromOldAddress[ref.fromAddr] = ref
-                    self.matchFromNewAddress[match.newAddress] = ref
-                if ref.toAddr == match.oldAddress:
-                    self.matchToOldAddress[ref.toAddr] = ref
-                    self.matchToNewAddress[match.newAddress] = ref
+            for ref_vuln in refs_vuln:
+                for addr in match.match_old_address:
+                    block_vuln = project_vuln.factory.block(addr)
+                    if ref_vuln.fromAddr in block_vuln.instruction_addrs:
+                        i = block_vuln.instruction_addrs.index(block_vuln.addr)
+                        for ref_patch in refs_patch:
+                            block_patch = project_patch.factory.block(match.match_new_address[addr])
+                            if ref_patch.fromAddr == block_patch.instruction_addrs[i]:
+                                self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
+                                self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
+                                self.match_to_old_address[ref_vuln.toAddr] = ref_patch
+                                self.match_to_new_address[ref_patch.toAddr] = ref_vuln
+                    if ref_vuln.toAddr in block_vuln.instruction_addrs:
+                        i = block_vuln.instruction_addrs.index(block_vuln.addr)
+                        for ref_patch in refs_patch:
+                            block_patch = project_patch.factory.block(match.match_new_address[addr])
+                            if ref_patch.toAddr == block_patch.instruction_addrs[i]:
+                                if ref_patch.toAddr in self.match_to_new_address:
+                                    pass
+                                else:
+                                    self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
+                                    self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
+                                    self.match_to_old_address[ref_vuln.toAddr] = ref_patch
+                                    self.match_to_new_address[ref_patch.toAddr] = ref_vuln
 
-    def get_refs(self, function):
-        project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", load_options={'main_opts': {'base_addr': 65536}, 'auto_load_libs': False})
+
+
+    def get_refs(self, project):
+
         target_function = project.loader.find_symbol("png_check_keyword")
         cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs,
                                            context_sensitivity_level=0, starts=[target_function.rebased_addr])

@@ -16,7 +16,7 @@ class ConstraintSolver:
         :param slice: The slice of the Control Flow Graph
         :param jump_target: The jump target of the Control Flow Graph
         """
-
+        results = []
         # Iterating over the instruction addresses in the slice
         for address, ids in slice.items():
             block = self.project.factory.block(address)
@@ -30,7 +30,6 @@ class ConstraintSolver:
                     continue
                 else:
                     break
-
 
         # Solve equation system so that it jumps to the target
 
@@ -48,14 +47,16 @@ class ConstraintSolver:
             for equation in self.solver.assertions():
                 print("\n\t", equation)
 
-            print(model)
             for decl in model.decls():
-                print(decl)
-                variable = model.eval(decl(), True)
-                print(variable)
-                # if (decl.getName().toString().equals(relevantRegister.getName()))
 
-        #
+                variable = model.eval(decl(), True)
+
+                result = (decl, variable)
+                results.append(result)
+
+        return results
+
+
         #             if (isPatchMemory):
         # #  Need to ADD four since SUB instruction is 4 bit longer than the ADD instruction;
         #                 subPlusFour = Integer.parseInt(variable.toString())
@@ -67,7 +68,6 @@ class ConstraintSolver:
         #                 relevantRegister.value = Integer.parseInt(variable.toString())
         #                 results.add(relevantRegister)
 
-    # TODO: Give back the correct format of Results. In what shape do we need the registers? E.g. offset=12 or r1?
 
     def handle_vex_statement(self, statement, address):
         if isinstance(statement, pyvex.stmt.IMark):

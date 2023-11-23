@@ -23,10 +23,11 @@ new_memory_address = project.loader.main_object.segments[0].vaddr + project.load
 
 cfg = project.analyses.CFGFast()
 
-
+target_function = project.loader.find_symbol("png_check_keyword")
 block_next.vex.pp()
 
-
+for instruction in block.capstone.insns:
+    print("Hallo")
 
 expr = block.vex.statements[1]
 
