@@ -34,7 +34,7 @@ cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_o
 # cfg = project.analyses.CFGFast(start=target_function.rebased_addr, end=target_function.rebased_addr+460)
 
 
-# refs = project.analyses.XRefs(func=target_function.rebased_addr)
+refs = project.analyses.XRefs(func=target_function.rebased_addr)
 # print(refs.kb.xrefs.xrefs_by_ins_addr)
 
 # cfg.normalize()

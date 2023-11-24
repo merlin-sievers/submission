@@ -83,10 +83,8 @@ class VariableBackwardSlicing(BackwardSlice):
         # Address of all chosen statements for each SimRun
         self.chosen_statements_addrs = set()
 
-
         if not no_construct:
             self._construct_default(self._targets, variable)
-
 
     def _construct_default(self, targets, var):
         """

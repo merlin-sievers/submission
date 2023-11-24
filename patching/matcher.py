@@ -5,7 +5,7 @@ from patching.configuration import Config
 
 
 class Matcher:
-    def __init__(self, project_vuln, project_patch):
+    def __init__(self, cfg_vuln, cfg_patch):
         self.match_old_address = dict()
         self.match_new_address = dict()
 
@@ -14,11 +14,11 @@ class Matcher:
         results = config.openBindiffResults()
 
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
-        for node in project_vuln.cfg.graph.nodes:
+        for node in cfg_vuln.graph.nodes:
             for row in results:
                 address1, address2, count = row
                 if node.addr == address1:
-                    node_old = project_patch.cfg.get_any_node(address2)
+                    node_old = cfg_patch.get_any_node(address2)
                     if node_old.block.instructions == node.block.instructions:
                         i = 0
                         # Going through each individual instruction to check if the mnemonics are the same
@@ -31,9 +31,9 @@ class Matcher:
                             self.match_old_address[node.addr] = address2
                             self.match_new_address[address2] = node.addr
 
-    def get_not_matched_blocks(self, project, entryPoint, end):
+    def get_not_matched_blocks(self, cfg, entryPoint, end):
         notMatchedBlocks = []
-        nodes = list(filter(lambda node: entryPoint <= node.addr <= end, project.cfg.graph.nodes))
+        nodes = list(filter(lambda node: entryPoint <= node.addr <= end, cfg.graph.nodes))
         for block in nodes:
             if block.addr in self.match_old_address:
                 pass
@@ -54,33 +54,32 @@ class RefMatcher:
         self.match_from_new_address = dict()
 
 
-    def match_references_from_perfect_matched_blocks(self, perfectMatches, refs_vuln, refs_patch, project_vuln, project_patch):
+    def match_references_from_perfect_matched_blocks(self, perfect_matches, refs_vuln, refs_patch, project_vuln, project_patch):
         # TODO: Match References if they are in a perfectly matched BasicBlock in the Function and outside of the Function
-        for match in perfectMatches:
-            for ref_vuln in refs_vuln:
-                for addr in match.match_old_address:
-                    block_vuln = project_vuln.factory.block(addr)
-                    if ref_vuln.fromAddr in block_vuln.instruction_addrs:
-                        i = block_vuln.instruction_addrs.index(block_vuln.addr)
-                        for ref_patch in refs_patch:
-                            block_patch = project_patch.factory.block(match.match_new_address[addr])
-                            if ref_patch.fromAddr == block_patch.instruction_addrs[i]:
+        for ref_vuln in refs_vuln:
+            for addr in perfect_matches.match_old_address:
+                block_vuln = project_vuln.factory.block(addr)
+                if ref_vuln.fromAddr in block_vuln.instruction_addrs:
+                    i = block_vuln.instruction_addrs.index(block_vuln.addr)
+                    for ref_patch in refs_patch:
+                        block_patch = project_patch.factory.block(perfect_matches.match_new_address[addr])
+                        if ref_patch.fromAddr == block_patch.instruction_addrs[i]:
+                            self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
+                            self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
+                            self.match_to_old_address[ref_vuln.toAddr] = ref_patch
+                            self.match_to_new_address[ref_patch.toAddr] = ref_vuln
+                if ref_vuln.toAddr in block_vuln.instruction_addrs:
+                    i = block_vuln.instruction_addrs.index(block_vuln.addr)
+                    for ref_patch in refs_patch:
+                        block_patch = project_patch.factory.block(perfect_matches.match_new_address[addr])
+                        if ref_patch.toAddr == block_patch.instruction_addrs[i]:
+                            if ref_patch.toAddr in self.match_to_new_address:
+                                pass
+                            else:
                                 self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
                                 self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
                                 self.match_to_old_address[ref_vuln.toAddr] = ref_patch
                                 self.match_to_new_address[ref_patch.toAddr] = ref_vuln
-                    if ref_vuln.toAddr in block_vuln.instruction_addrs:
-                        i = block_vuln.instruction_addrs.index(block_vuln.addr)
-                        for ref_patch in refs_patch:
-                            block_patch = project_patch.factory.block(match.match_new_address[addr])
-                            if ref_patch.toAddr == block_patch.instruction_addrs[i]:
-                                if ref_patch.toAddr in self.match_to_new_address:
-                                    pass
-                                else:
-                                    self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
-                                    self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
-                                    self.match_to_old_address[ref_vuln.toAddr] = ref_patch
-                                    self.match_to_new_address[ref_patch.toAddr] = ref_vuln
 
 
 
