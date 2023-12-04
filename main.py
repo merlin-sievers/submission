@@ -18,7 +18,7 @@ from variable_backward_slicing import VariableBackwardSlicing
 
 
 # loading the patch binary to perform backward slicing
-project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs=False)
+project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", load_options={'main_opts': {'base_addr': 65536}, 'auto_load_libs': False})
 
 # Getting the target function
 target_function = project.loader.find_symbol("png_check_keyword")

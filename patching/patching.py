@@ -31,12 +31,12 @@ class Patching:
         self.backend = None
         self.writing_address = None
         # TODO: Add path to the binary as an argument for the configuration
-        self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs=False)
+        self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs= False)
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
         self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size
 
-        self.project_patch = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs=False)
+        self.project_patch = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs = False)
         self.cfg_patch = self.project_patch.analyses.CFGFast()
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
         self.end_patch = self.entry_point_patch + self.project_patch.loader.find_symbol(self.patching_config.functionName).size
@@ -65,7 +65,7 @@ class Patching:
         # }
 
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
-        perfect_matches = Matcher(self.cfg_vuln, self.cfg_patch)
+        perfect_matches = Matcher(self.cfg_vuln, self.cfg_patch, self.project_vuln, self.project_patch)
 
         # Getting all References from both the vulnerable Program and the patch Program
         matched_refs = RefMatcher()
@@ -74,11 +74,11 @@ class Patching:
 
         # Match all References
         matched_refs.match_references_from_perfect_matched_blocks(perfect_matches, refs_vuln, refs_patch, self.project_vuln, self.project_patch)
-
+        s = matched_refs.match_from_new_address
         # Preparation for writing the Patch in the vulnerable Version
 
-        vulnerable_blocks = perfect_matches.get_not_matched_blocks(self.cfg_vuln, self.entry_point_vuln, self.end_vuln)
-        patch_blocks = perfect_matches.get_not_matched_blocks(self.cfg_patch, self.entry_point_patch, self.end_patch)
+        vulnerable_blocks = perfect_matches.get_not_matched_blocks(self.cfg_vuln, self.entry_point_vuln, self.end_vuln, perfect_matches.match_old_address)
+        patch_blocks = perfect_matches.get_not_matched_blocks(self.cfg_patch, self.entry_point_patch, self.end_patch, perfect_matches.match_new_address)
 
         start_address_of_patch = min(vulnerable_blocks)
 
@@ -101,7 +101,7 @@ class Patching:
         new_memory_address = self.project_vuln.loader.main_object.segments[0].vaddr + self.project_vuln.loader.main_object.segments[0].memsize
 
         # Estimate size of patch to find space for newly added references and data
-        self.new_memory_writing_address =  new_memory_address + 2 * (self.patch_code_block_end.addr - self.patch_code_block_start.addr)
+        self.new_memory_writing_address = new_memory_address + 2 * (self.patch_code_block_end.addr - self.patch_code_block_start.addr)
 
         # Jump to new Memory
         print(start_address_of_patch)
@@ -122,11 +122,11 @@ class Patching:
 
                 # Implement the following to use Angr References
 
-                reference = self.get_references_from_instruction(instruction_patch, refs_patch)
+                reference = self.get_references_from_instruction(instruction_patch, refs_patch, block_patch.thumb)
 
                 # Handling of possible References
                 if reference is not None:
-                    self.handle_references(reference, matched_refs, refs_patch, instruction_patch)
+                    self.handle_references(reference, matched_refs, instruction_patch)
                 else:
                     self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
                     self.writing_address = self.writing_address + instruction_patch.size
@@ -172,7 +172,7 @@ class Patching:
         self.backend.apply_patches(patches)
 
 
-    def get_references_from_instruction(self, instruction, refs):
+    def get_references_from_instruction(self, instruction, refs, thumb):
         """
         Check if there is a Reference in refs that is from the given instruction
         :param instruction:
@@ -180,17 +180,23 @@ class Patching:
         :return: Reference or None
         """
         for ref in refs:
-            if ref.fromAddr == instruction.address:
-                return ref
+            if thumb:
+                if ref.fromAddr == instruction.address - 1:
+                    return ref
+                else:
+                    pass
             else:
-                return None
+                if ref.fromAddr == instruction.address:
+                    return ref
+                else:
+                    pass
 
-    def handle_references(self, reference, refs, matched_refs, instruction_patch):
+
+    def handle_references(self, reference, matched_refs, instruction_patch):
         """
         See if Reference is a matched Address, then use the matched Reference instead
 
         :param reference:
-        :param refs:
         :param matched_refs:
         :param instruction_patch:
         :return:
@@ -206,7 +212,7 @@ class Patching:
 
         # If the Reference is not perfectly matched
         else:
-            self.add_new_reference()
+            self.add_new_reference(instruction_patch, reference)
 
 
     def rewriting_bytes_of_code_unit_to_new_address(self, instruction, address):
@@ -351,7 +357,7 @@ class Patching:
     def add_new_reference(self, instruction_patch, reference):
 
         if self._reference_outside_of_patch(self.patch_code_block_start, self.patch_code_block_end, reference):
-            self.rewriting_and_adding_reference_to_the_old_program()
+            self.rewriting_and_adding_reference_to_the_old_program(reference, instruction_patch)
             self.writing_address = self.writing_address + 4
         else:
             self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
@@ -442,7 +448,7 @@ class Patching:
         if reference.refType == "read":
             self.add_read_reference(instruction_patch)
         elif reference.refType == "param":
-            self.add_offset_reference(reference)
+            self.add_offset_reference(reference, instruction_patch)
 
     def add_read_reference(self, instruction_patch):
 
@@ -592,7 +598,7 @@ class Patching:
     # Static methods
     @staticmethod
     def _reference_outside_of_patch(block_start, block_end, old_reference):
-        if block_start < old_reference.toAddr < block_end.addr + block_end.size:
+        if block_start.addr < old_reference.toAddr < block_end.addr + block_end.size:
             return False
         else:
             return True
