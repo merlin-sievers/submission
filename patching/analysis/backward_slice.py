@@ -99,7 +99,7 @@ class VariableBackwardSlicing(BackwardSlice):
         :param var:     The variable to slice on.
         """
         print("Erste variable", var)
-        self._worklist(targets, var)
+        self._worklist([targets], var)
 
     def _constraint_function(self, cl, variables):
         """

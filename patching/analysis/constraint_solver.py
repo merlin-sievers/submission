@@ -35,6 +35,8 @@ class ConstraintSolver:
 
         new_target = z3.BitVecVal(jump_target, 32)
         print(self.variables)
+        if self.variables == []:
+            return None
         self.solver.add(self.variables[0] == new_target)
 
         if self.solver.check() == z3.sat:
@@ -92,12 +94,16 @@ class ConstraintSolver:
             register = z3.BitVec("r" + str(statement.data.offset), 32)
             self.solver.add(temp == register)
             self.variables.append(register)
+            self.variables.append(temp)
+
         # Handle t1 = LDle:I32(0x00000)
         if isinstance(statement.data, pyvex.expr.Load):
             temp = z3.BitVec("t" + str(statement.tmp), 32)
             load = z3.BitVec(str(statement.data.addr), 32)
             self.solver.add(temp == load)
             self.variables.append(load)
+            self.variables.append(temp)
+
         # Handle t1 = Add32(t56,0x00000000)
         if isinstance(statement.data, pyvex.expr.Binop):
             temp = z3.BitVec("t" + str(statement.tmp), 32)
@@ -105,8 +111,7 @@ class ConstraintSolver:
             op2 = z3.BitVecVal(statement.data.args[1].con.value, 32)
             if statement.data.op == "Iop_Add32":
                 self.solver.add(temp == op1 + op2)
-        self.variables.append(temp)
-
+            self.variables.append(temp)
 
         return True
 

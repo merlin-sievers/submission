@@ -15,7 +15,7 @@ class Matcher:
 
         # Get angr BinDiff results
         bindiff_results = project_vuln.analyses.BinDiff(project_patch)
-        sa = bindiff_results.get_function_diff(4231177, 4213209)
+
 
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
         for tuple in bindiff_results.identical_blocks:
@@ -63,6 +63,7 @@ class RefMatcher:
 
     # TODO: Write constructor in a way that it takes the project of the vulnerable and the patched version and gets all the references
     def __init__(self):
+        self.bindiff_results = None
         self.match_to_old_address = dict()
         self.match_to_new_address = dict()
         self.match_from_old_address = dict()
@@ -70,6 +71,7 @@ class RefMatcher:
 
     def match_references_from_perfect_matched_blocks(self, perfect_matches, refs_vuln, refs_patch, project_vuln, project_patch):
         # TODO: Match References if they are in a perfectly matched BasicBlock in the Function and outside of the Function
+        self.bindiff_results = project_vuln.analyses.BinDiff(project_patch)
         for ref_vuln in refs_vuln:
             for addr in perfect_matches.match_old_address:
                 if addr - 100 <= ref_vuln.fromAddr <= addr + 100:
@@ -97,6 +99,18 @@ class RefMatcher:
                                     self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
                                     self.match_to_old_address[ref_vuln.toAddr] = ref_patch
                                     self.match_to_new_address[ref_patch.toAddr] = ref_vuln
+            for function_addr, _  in self.bindiff_results.function_matches:
+                if ref_vuln.toAddr + 1 == function_addr:
+                    for ref_patch in refs_patch:
+                        if (ref_vuln.toAddr + 1, ref_patch.toAddr + 1) in self.bindiff_results.function_matches:
+                            self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
+                            self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
+                            self.match_to_old_address[ref_vuln.toAddr] = ref_patch
+                            self.match_to_new_address[ref_patch.toAddr] = ref_vuln
+
+
+
+
 
 
 

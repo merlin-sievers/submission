@@ -131,7 +131,7 @@ class Patching:
                     self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
                     self.writing_address = self.writing_address + instruction_patch.size
 
-                patch_block_start_address = patch_block_start_address + block_patch.size
+            patch_block_start_address = patch_block_start_address + block_patch.size
 
         #    Set the End for the last ShiftZone
         if self.shifts_ascending:
@@ -191,7 +191,6 @@ class Patching:
                 else:
                     pass
 
-
     def handle_references(self, reference, matched_refs, instruction_patch):
         """
         See if Reference is a matched Address, then use the matched Reference instead
@@ -212,8 +211,12 @@ class Patching:
 
         # If the Reference is not perfectly matched
         else:
-            self.add_new_reference(instruction_patch, reference)
-
+            # TODO: ADAPT current workaround...
+            if instruction_patch.mnemonic == "mov":
+                self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+                self.writing_address = self.writing_address + instruction_patch.size
+            else:
+                self.add_new_reference(instruction_patch, reference)
 
     def rewriting_bytes_of_code_unit_to_new_address(self, instruction, address):
         """
@@ -275,12 +278,10 @@ class Patching:
                 variable = definition._variable.variable
                 location = definition._variable.location
 
-
         solver = ConstraintSolver(self.project_patch)
         # Calculate Address where the value of the PARAM reference need to be written
 
         jump_target = old_reference.toAddr
-
 
         backward_slice = VariableBackwardSlicing(cfg=self.cfge_patch_specific,
                                                                            ddg=self.ddg_patch_specific,
@@ -345,7 +346,7 @@ class Patching:
 
         # Reference outside of function and outside of patch
             else:
-                self.reassemble_reference_at_different_address(instruction_patch, old_reference)
+                self.reassemble_reference_at_different_address(instruction_patch, old_reference, self.writing_address)
                 self.writing_address = self.writing_address + instruction_patch.size
 
         # Reference inside of patch
@@ -436,7 +437,7 @@ class Patching:
 
     def reassemble_reference_at_different_address(self, instruction_patch, old_reference, writing_address):
 
-        new_string = self.replace_jump_target_address(instruction_patch, old_reference.toAddr)
+        new_string = self.replace_jump_target_address(instruction_patch, old_reference.toAddr + 1)
 
         patches = [InlinePatch(writing_address, new_string)]
         self.backend.apply_patches(patches)
@@ -447,8 +448,9 @@ class Patching:
 
         if reference.refType == "read":
             self.add_read_reference(instruction_patch)
-        elif reference.refType == "param":
+        elif reference.refType == "offset":
             self.add_offset_reference(reference, instruction_patch)
+
 
     def add_read_reference(self, instruction_patch):
 
@@ -491,7 +493,7 @@ class Patching:
 
         # Run analysis to get the value that needs to be loaded in the previously modified address
         # Get Variable defined in instruction and the CodeLocation of the instruction
-        instr_view = self.ddg_patch_specific.view[instruction_patch.addr]
+        instr_view = self.ddg_patch_specific.view[instruction_patch.address]
         definitions: list = instr_view.definitions
         variable = None
         location = None
@@ -524,12 +526,17 @@ class Patching:
 
         results = solver.solve(backward_slice.chosen_statements, self.new_memory_data_address)
 
+        if results is None:
+            return
+
         for res in self.new_def_registers:
             if res in self.used_registers:
                 for result, _ in results:
                     if res.register_name == result:
                         reg = res
                         self.new_def_registers.remove(res)
+            else:
+                return
 
         # Calculate bytes of value that needs to be loaded in the previously modified address
 
