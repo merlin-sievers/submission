@@ -15,7 +15,7 @@ project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto
 # project = angr.Project("/Users/sebastian/Public/libcurl-7.24/libcurl.so.7.24.0", engine=angr.engines.UberEnginePcode, auto_load_libs=False)
 
 
-# target_function = project.loader.find_symbol("png_check_keyword")
+target_function = project.loader.find_symbol("png_check_keyword")
 
 # e_state = project.factory.blank_state(addr=target_function.rebased_addr)
 
@@ -35,11 +35,11 @@ project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto
 # found = simgr.found[0] # A state that reached the find condition from explore
 # print(found.solver.all_variables)
 
-# cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=2, starts=[target_function.rebased_addr])
+cfge = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=2, starts=[target_function.rebased_addr])
 # cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=1, starts=[project.entry])
 
 cfg = project1.analyses.CFGFast()
-plot_cfg(cfg, fname="CFGFast", asminst=True, remove_imports=True, remove_path_terminator=False)
+# plot_cfg(cfg, fname="CFGFast", asminst=True, remove_imports=True, remove_path_terminator=False)
 
 print(cfg.graph.size())
 
@@ -49,7 +49,7 @@ print(project.kb.xrefs.xrefs_by_ins_addr)
 # function = cfg.kb.functions.function(name="png_check_keyword")
 
 # Getting the DDG
-# ddg = project.analyses.DDG(cfg, start=target_function.rebased_addr)
+ddg = project.analyses.DDG(cfge, start=target_function.rebased_addr)
 
 # CodeLocations are part of the DDG
 # cl1 = CodeLocation(0x4049fb, ins_addr=0x4049f5, stmt_idx=18)

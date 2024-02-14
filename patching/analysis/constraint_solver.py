@@ -10,7 +10,7 @@ class ConstraintSolver:
         self.variables = []
         self.results = []
 
-    def solve(self, slice, jump_target):
+    def solve(self, slice, jump_target, writing_address):
         """
         Running the SMTSolver with the Slice of a Control Flow graph and the jump target
         :param slice: The slice of the Control Flow Graph
@@ -24,9 +24,9 @@ class ConstraintSolver:
             if block.thumb:
                 address = address - 1
             # Now iterate over the vex statements of the instruction
-            for id in ids:
+            for id, ins_addr in ids:
                 statement = block.vex.statements[id]
-                if self.handle_vex_statement(statement, address):
+                if self.handle_vex_statement(statement, ins_addr, writing_address):
                     continue
                 else:
                     break
@@ -34,10 +34,10 @@ class ConstraintSolver:
         # Solve equation system so that it jumps to the target
 
         new_target = z3.BitVecVal(jump_target, 32)
-        print(self.variables)
+        print(self.variables[len(self.variables)-1])
         if self.variables == []:
             return None
-        self.solver.add(self.variables[0] == new_target)
+        self.solver.add(self.variables[len(self.variables)-1] == new_target)
 
         if self.solver.check() == z3.sat:
         # Get the model
@@ -71,15 +71,13 @@ class ConstraintSolver:
         #                 results.add(relevantRegister)
 
 
-    def handle_vex_statement(self, statement, address):
+    def handle_vex_statement(self, statement, address, writing_address):
         if isinstance(statement, pyvex.stmt.IMark):
             return self._handle_vex_IMark_statement(statement, address)
         elif isinstance(statement, pyvex.stmt.WrTmp):
-            return self._handle_vex_WrTmp_statement(statement)
+            return self._handle_vex_WrTmp_statement(statement, address, writing_address)
         elif isinstance(statement, pyvex.stmt.Put):
             return self._handle_vex_Put_statement(statement)
-
-
 
     def _handle_vex_IMark_statement(self, statement, address):
         if statement.addr == address:
@@ -87,7 +85,7 @@ class ConstraintSolver:
         else:
             return False
 
-    def _handle_vex_WrTmp_statement(self, statement):
+    def _handle_vex_WrTmp_statement(self, statement, address, writing_address):
         # Handle t1 = GET:I32(r1)
         if isinstance(statement.data, pyvex.expr.Get):
             temp = z3.BitVec("t" + str(statement.tmp), 32)
@@ -108,7 +106,8 @@ class ConstraintSolver:
         if isinstance(statement.data, pyvex.expr.Binop):
             temp = z3.BitVec("t" + str(statement.tmp), 32)
             op1 = z3.BitVec(str(statement.data.args[0]), 32)
-            op2 = z3.BitVecVal(statement.data.args[1].con.value, 32)
+            new_address = statement.data.args[1].con.value - address + writing_address
+            op2 = z3.BitVecVal(new_address, 32)
             if statement.data.op == "Iop_Add32":
                 self.solver.add(temp == op1 + op2)
             self.variables.append(temp)
@@ -125,7 +124,7 @@ class ConstraintSolver:
             variable = z3.BitVecVal(statement.data.con.value, 32)
         else:
             variable = z3.BitVec("t", 32)
-        self.variables.append(register)
         self.variables.append(variable)
+        self.variables.append(register)
         self.solver.add(register == variable)
         return True

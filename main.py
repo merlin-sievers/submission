@@ -18,11 +18,10 @@ from variable_backward_slicing import VariableBackwardSlicing
 
 
 # loading the patch binary to perform backward slicing
-project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", load_options={'main_opts': {'base_addr': 65536}, 'auto_load_libs': False})
+project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs= False)
 
 # Getting the target function
 target_function = project.loader.find_symbol("png_check_keyword")
-
 
 # Getting the target block to be able to manually verify the backward slicing
 target_block = project.factory.block(addr=0x4049f5)
@@ -34,6 +33,7 @@ cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_o
 # cfg = project.analyses.CFGFast(start=target_function.rebased_addr, end=target_function.rebased_addr+460)
 
 
+
 refs = project.analyses.XRefs(func=target_function.rebased_addr)
 # print(refs.kb.xrefs.xrefs_by_ins_addr)
 
@@ -41,7 +41,7 @@ refs = project.analyses.XRefs(func=target_function.rebased_addr)
 # vfg = project.analyses.VSA_DDG(start_addr=target_function.rebased_addr)
 # print(vfg.graph.size())
 # for node in vfg.graph.nodes:
-#     print(node, type(node))
+#     print("VSA", node, type(node))
 #
 # plot_cfg(cfg, fname="png_check_keyword_fast", asminst=True, remove_imports=True, remove_path_terminator=True)
 
@@ -54,9 +54,9 @@ ddg = project.analyses.DDG(cfg, start=target_function.rebased_addr)
 #
 # plot_ddg_data(ddg.data_sub_graph(), fname="png_check_keyword_ddg", asminst=False)
 
-for node in ddg.data_graph.nodes:
-    if node.location.ins_addr == 0x4049fb:
-        print("found", node.variable, node.location)
+# for node in ddg.data_graph.nodes:
+#     if node.location.ins_addr == 0x4049fb:
+#         print("found", node.variable, node.location)
 
 # CodeLocations are part of the DDG
 cl1 = CodeLocation(0x4049f5, ins_addr=0x4049fb, stmt_idx=19)
@@ -70,9 +70,13 @@ for definition in definitions:
     print(definition._variable, definition.depends_on)
 #     Now only take the register variables
     if isinstance(definition._variable.variable, SimRegisterVariable):
+        pv1 = pv
         var = definition._variable.variable
+        loc = [definition._variable.location]
         print(var)
-        print(var.loc_repr(arch=project.arch))
+        print(loc)
+
+block = cfg.get_any_node(cl1.block_addr)
 
 block = project.factory.block(addr=0x4049fb)
 print("target address", target_block.addr)
@@ -88,7 +92,7 @@ print("target address", target_block.addr)
 # for n in ddg.graph.nodes:
 #     print(n.block_addr, n.ins_addr, n.stmt_idx)
 #
-loc = [cl1]
+# loc = [cl1]
 # for founds in found:
 #     loc.append(founds.location)
 # Get the CDG of the target function
@@ -127,11 +131,11 @@ cdg = project.analyses.CDG(cfg, start=target_function.rebased_addr)
 # for node1 in ddg_sub.nodes:
 #     print(node1)
 
-
+ddg.find_sources(pv1, simplified_graph=False)
 #
 #
 # print("input", var)
-bs = VariableBackwardSlicing(cfg, cdg=cdg, ddg=ddg, variable=var, project=project, targets=loc)
+bs = VariableBackwardSlicing(cfg, cdg=cdg, ddg=ddg, variable=pv1, project=project, targets=loc)
 #
 # for ins in bs.chosen_statements_addrs:
 #     print(hex(ins))
@@ -149,4 +153,5 @@ for stat, ids in bs.chosen_statements.items():
         print(id)
 
 constraints = ConstraintSolver(project)
-constraints.solve(bs.chosen_statements, target_block.addr)
+results = constraints.solve(bs.chosen_statements, 0x400000, 0x2049fb)
+print(results)

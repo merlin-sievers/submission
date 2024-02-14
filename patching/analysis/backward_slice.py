@@ -127,6 +127,7 @@ class VariableBackwardSlicing(BackwardSlice):
                         self._pick_statement(cl.block_addr, cl.stmt_idx)
                         self.chosen_statements_addrs.add(cl.ins_addr)
                         for dep_def in self._ddg.view[cl.ins_addr].definitions:
+                            print("dep_def", dep_def)
                             if dep_def._variable.variable == vars:
                                 for var_dep in dep_def.depends_on:
                                     vars_to_add.add(var_dep._variable.variable)

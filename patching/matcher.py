@@ -108,12 +108,6 @@ class RefMatcher:
                             self.match_to_old_address[ref_vuln.toAddr] = ref_patch
                             self.match_to_new_address[ref_patch.toAddr] = ref_vuln
 
-
-
-
-
-
-
     def get_refs(self, project):
 
         target_function = project.loader.find_symbol("png_check_keyword")
