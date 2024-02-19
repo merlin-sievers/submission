@@ -1,11 +1,12 @@
 import re
-
+import pickle
+import os
 import angr
 from angr.sim_variable import SimRegisterVariable
 
 from patcherex.patches import *
 
-import variable_backward_slicing
+
 from patching.analysis.backward_slice import VariableBackwardSlicing
 from patching.analysis.constraint_solver import ConstraintSolver
 from patching.matcher import Matcher
@@ -33,8 +34,10 @@ class Patching:
         # TODO: Add path to the binary as an argument for the configuration
         self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs= False)
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
+
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
         self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size
+        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
 
         self.project_patch = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs = False)
         self.cfg_patch = self.project_patch.analyses.CFGFast()
@@ -231,7 +234,7 @@ class Patching:
 
         # Tracking Register for later backward slicing and static analysis
 
-        register_pattern = re.compile(r'r\d+')
+        register_pattern = re.compile(r'(r\d+|sb|sl)')
 
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction_patch.op_str)
@@ -274,7 +277,7 @@ class Patching:
         for definition in definitions:
         #     Now only take the register variable
             if isinstance(definition._variable.variable, SimRegisterVariable):
-                variable = definition._variable.variable
+                variable = definition._variable
                 location = definition._variable.location
 
         solver = ConstraintSolver(self.project_patch)
@@ -301,7 +304,7 @@ class Patching:
 
 
 
-        results = solver.solve(backward_slice.chosen_statements, jump_target)
+        results = solver.solve(backward_slice.chosen_statements, jump_target, self.writing_address)
 
 
         for res in self.new_def_registers:
@@ -523,7 +526,7 @@ class Patching:
         # Check what we want here. We could extend the .data .rodata section maybe?? Or just put it at a very far way address in the already extended section
         self.new_memory_data_address = self.new_memory_writing_address + 80
 
-        results = solver.solve(backward_slice.chosen_statements, self.new_memory_data_address)
+        results = solver.solve(backward_slice.chosen_statements, self.new_memory_data_address, self.writing_address)
 
         if results is None:
             return

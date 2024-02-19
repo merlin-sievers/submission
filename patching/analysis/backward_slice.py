@@ -4,7 +4,9 @@ from collections import defaultdict
 import networkx
 from angr import AngrBackwardSlicingError
 from angr.analyses import BackwardSlice
+from angr.analyses.ddg import ProgramVariable
 from angr.code_location import CodeLocation
+from angr.sim_variable import SimTemporaryVariable
 
 
 class VariableBackwardSlicing(BackwardSlice):
@@ -83,8 +85,10 @@ class VariableBackwardSlicing(BackwardSlice):
         # Address of all chosen statements for each SimRun
         self.chosen_statements_addrs = set()
 
+
         if not no_construct:
             self._construct_default(self._targets, variable)
+
 
     def _construct_default(self, targets, var):
         """
@@ -99,7 +103,11 @@ class VariableBackwardSlicing(BackwardSlice):
         :param var:     The variable to slice on.
         """
         print("Erste variable", var)
-        self._worklist([targets], var)
+
+        if isinstance(var, ProgramVariable):
+            self._alternativ_worklist(var)
+        else:
+            self._worklist(targets, var)
 
     def _constraint_function(self, cl, variables):
         """
@@ -124,10 +132,12 @@ class VariableBackwardSlicing(BackwardSlice):
 
                     if vars == definition.variable:
                         vars_to_remove.add(vars)
-                        self._pick_statement(cl.block_addr, cl.stmt_idx)
+                        self._pick_statement(cl.block_addr, cl.stmt_idx, cl.ins_addr)
                         self.chosen_statements_addrs.add(cl.ins_addr)
-                        for dep_def in self._ddg.view[cl.ins_addr].definitions:
-                            print("dep_def", dep_def)
+                        ddg_definitions = self._ddg.view[cl.ins_addr].definitions
+                        view = self._ddg.find_sources(definition, simplified_graph=False)
+                        print(view)
+                        for dep_def in ddg_definitions:
                             if dep_def._variable.variable == vars:
                                 for var_dep in dep_def.depends_on:
                                     vars_to_add.add(var_dep._variable.variable)
@@ -141,6 +151,36 @@ class VariableBackwardSlicing(BackwardSlice):
             variables.add(vars)
 
         return variables
+
+
+    def _alternativ_worklist(self, var_def):
+        sources = []
+        defs = [var_def]
+        traversed = set()
+        self.chosen_statements_addrs.add(var_def.location.ins_addr)
+        self._pick_statement(var_def.location.block_addr, var_def.location.stmt_idx, var_def.location.ins_addr)
+
+        while defs:
+            definition = defs.pop()
+            in_edges = self._ddg.data_graph.in_edges(definition, data=True)
+            for src, _, data in in_edges:
+                if "type" in data and data["type"] == "kill":
+                    continue
+                if isinstance(src.variable, SimTemporaryVariable):
+                    if src not in traversed:
+                        defs.append(src)
+                        traversed.add(src)
+                        self.chosen_statements_addrs.add(src.location.ins_addr)
+                        self._pick_statement(src.location.block_addr, src.location.stmt_idx, src.location.ins_addr)
+                else:
+                    if src not in sources:
+                        sources.append(src)
+                        self.chosen_statements_addrs.add(src.location.ins_addr)
+                        self._pick_statement(src.location.block_addr, src.location.stmt_idx, src.location.ins_addr)
+
+
+
+
 
     def _worklist(self, starts, var):
         """
