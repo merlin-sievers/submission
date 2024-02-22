@@ -5,7 +5,8 @@ import angr
 import lief
 import re
 # the detour backend can be used as well:
-
+import os
+import pickle
 
 from elftools.elf.elffile import ELFFile
 from elftools.elf.sections import Section
@@ -15,7 +16,11 @@ from patching.patching import Patching
 
 config = Config()
 
+
 patching = Patching(config)
+
+
+
 patching.patch(config.binary_path)
 
 

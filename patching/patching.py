@@ -242,7 +242,6 @@ class Patching:
         # Extract the first match (assuming there is at least one match)
         register_name = matches[0]
 
-
         # TODO: Difference now assumes there are no more shifts than 32 bytes (pc + 28). That is a random guess.
 
         difference = reference.toAddr - reference.fromAddr
@@ -270,7 +269,7 @@ class Patching:
     def handle_offset_reference(self, instruction_patch, old_reference):
 
         # Get Variable defined in instruction and the CodeLocation of the instruction
-        instr_view = self.ddg_patch_specific.view[instruction_patch.addr]
+        instr_view = self.ddg_patch_specific.view[instruction_patch.address]
         definitions: list = instr_view.definitions
         variable = None
         location = None
@@ -294,7 +293,7 @@ class Patching:
 
         # Tracking Registers used in the backward slice
         for address in backward_slice.chosen_statements_addrs:
-            register_pattern = re.compile(r'r\d+')
+            register_pattern = re.compile(r'(r\d+|sb|sl)')
             # Find all matches in the instruction string
             matches = register_pattern.findall(self.project_patch.factory.block(address).capstone.insns[0].op_str)
             # Extract the first match (assuming there is at least one match)

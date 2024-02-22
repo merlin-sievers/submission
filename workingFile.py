@@ -1,6 +1,8 @@
 import angr, monkeyhex, archinfo
 import logging
 import claripy
+from angr.analyses import CFGEmulated
+from angr.analyses.bindiff import NormalizedFunction
 from angr.code_location import CodeLocation
 from angr.sim_variable import SimRegisterVariable
 
@@ -16,7 +18,7 @@ project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto
 
 
 target_function = project.loader.find_symbol("png_check_keyword")
-
+target_function1 = project1.loader.find_symbol("png_check_keyword")
 # e_state = project.factory.blank_state(addr=target_function.rebased_addr)
 
 # target_block = project.factory.block(addr=0x4049f5)
@@ -35,21 +37,53 @@ target_function = project.loader.find_symbol("png_check_keyword")
 # found = simgr.found[0] # A state that reached the find condition from explore
 # print(found.solver.all_variables)
 
-cfge = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=2, starts=[target_function.rebased_addr])
-# cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=1, starts=[project.entry])
+# cfge = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=2, starts=[target_function.rebased_addr])
+cfg_test = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=2, starts=[target_function.rebased_addr])
 
-cfg = project1.analyses.CFGFast()
+cfg_test1 = project1.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=2, starts=[target_function1.rebased_addr])
+
 # plot_cfg(cfg, fname="CFGFast", asminst=True, remove_imports=True, remove_path_terminator=False)
 
-print(cfg.graph.size())
+cfg1 = project1.analyses[CFGEmulated].prep()(
+    context_sensitivity_level=1,
+    keep_state=True,
+    enable_symbolic_back_traversal=True,
+    enable_advanced_backward_slicing=False,
+)
+cfg2 = project.analyses[CFGEmulated].prep()(
+    context_sensitivity_level=1,
+    keep_state=True,
+    enable_symbolic_back_traversal=True,
+    enable_advanced_backward_slicing=False,
+)
 
-print(project.kb.xrefs.xrefs_by_ins_addr)
+
+function1 = cfg1.kb.functions.function(name="png_check_keyword").blocks
+
+
+function2 = cfg2.kb.functions.function(name="png_check_keyword").blocks
+
+
+i=0
+for block in function1:
+    print("Block", i)
+    print(block.disassembly)
+    i+=1
+i=0
+for node in function2:
+    print("2. Block", i)
+    print(node.disassembly)
+    i += 1
+
+# print(cfg.graph.size())
+#
+# print(project.kb.xrefs.xrefs_by_ins_addr)
 
 # cfg.functions.callgraph.
 # function = cfg.kb.functions.function(name="png_check_keyword")
 
 # Getting the DDG
-ddg = project.analyses.DDG(cfge, start=target_function.rebased_addr)
+# ddg = project.analyses.DDG(cfge, start=target_function.rebased_addr)
 
 # CodeLocations are part of the DDG
 # cl1 = CodeLocation(0x4049fb, ins_addr=0x4049f5, stmt_idx=18)

@@ -5,7 +5,7 @@ import logging
 import claripy
 import networkx
 from angr import AngrBackwardSlicingError, Analysis
-from angr.analyses import BackwardSlice
+from angr.analyses import BackwardSlice, CFGEmulated
 from angr.code_location import CodeLocation
 from angr.sim_variable import SimRegisterVariable
 
@@ -29,8 +29,10 @@ target_block.vex.pp()
 
 
 # Building the CFGEmulated for the target function in order to be able to build the DDG
-cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=0, starts=[target_function.rebased_addr])
+cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[target_function.rebased_addr])
 # cfg = project.analyses.CFGFast(start=target_function.rebased_addr, end=target_function.rebased_addr+460)
+
+
 
 
 
@@ -59,8 +61,8 @@ ddg = project.analyses.DDG(cfg, start=target_function.rebased_addr)
 #         print("found", node.variable, node.location)
 
 # CodeLocations are part of the DDG
-cl1 = CodeLocation(0x4049f5, ins_addr=0x4049fb, stmt_idx=19)
-instr_view = ddg.view[0x4049fb]
+cl1 = CodeLocation(0x404a1b, ins_addr=0x404a25, stmt_idx=63)
+instr_view = ddg.view[0x404a25]
 # Getting variables and their dependencies form the ddg nodes
 definitions: list = instr_view.definitions
 var = None
@@ -68,7 +70,7 @@ for definition in definitions:
     pv = definition._variable
     print(type(definition))
     print(definition._variable, definition.depends_on)
-#     Now only take the register variables
+#  Now only take the register variables
     if isinstance(definition._variable.variable, SimRegisterVariable):
         pv1 = pv
         var = definition._variable.variable
@@ -76,11 +78,11 @@ for definition in definitions:
         print(var)
         print(loc)
 
-block = cfg.get_any_node(cl1.block_addr)
+# block = cfg.get_any_node(cl1.block_addr)
 
-block = project.factory.block(addr=0x4049fb)
-print("target address", target_block.addr)
-
+block = project.factory.block(addr=0x404a1b)
+print("block disassembly", block.disassembly)
+block.vex.pp()
 
 
 # Take all definitions of a variable that appear in the DDG
