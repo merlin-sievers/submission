@@ -98,44 +98,13 @@ class ConstraintSolver:
     def handle_vex_statement(self, stmt: pyvex.stmt.IRStmt, address, writing_address):
         handler = self._vex_stmt_handlers[stmt.tag_int]
         handler(stmt, address, writing_address)
+        return True
 
-    def _handle_vex_expr(self, expr: pyvex.expr.IRExpr, address, writing_address):
+    def _handle_vex_expr(self, expr: pyvex.expr.IRExpr, address, writing_address, tmp):
         handler = self._vex_expr_handlers[expr.tag_int]
-        handler(expr, address, writing_address)
+        handler(expr, address, writing_address, tmp)
 
 
-    #  All types of statements Ist_NoOp=0x1E00,
-    #       Ist_IMark,     /* META */
-    #       Ist_AbiHint,   /* META */
-    #       Ist_Put,
-    #       Ist_PutI,
-    #       Ist_WrTmp,
-    #       Ist_Store,
-    #       Ist_LoadG,
-    #       Ist_StoreG,
-    #       Ist_CAS,
-    #       Ist_LLSC,
-    #       Ist_Dirty,
-    #       Ist_MBE,
-    #       Ist_Exit
-
-
-
-    # All Types of expressions
-    #  Iex_Binder=0x1900,
-    #       Iex_Get,
-    #       Iex_GetI,
-    #       Iex_RdTmp,
-    #       Iex_Qop,
-    #       Iex_Triop,
-    #       Iex_Binop,
-    #       Iex_Unop,
-    #       Iex_Load,
-    #       Iex_Const,
-    #       Iex_ITE,
-    #       Iex_CCall,
-    #       Iex_VECRET,
-    #       Iex_GSPTR
 
     # Statement Handlers
     def _handle_vex_stmt_IMark(self, statement, address, writing_address):
@@ -153,11 +122,13 @@ class ConstraintSolver:
         pass
 
     def _handle_vex_stmt_WrTmp(self, statement, address, writing_address):
-        return self._handle_vex_expr(statement.data, address, writing_address)
+        tmp = z3.BitVec("t" + str(statement.tmp), 32)
+        self._handle_vex_expr(statement.data, address, writing_address, tmp)
+        return True
 
     def _handle_vex_stmt_Put(self, statement, address, writing_address):
         register = z3.BitVec("r" + str(statement.offset), 32)
-        self._handle_vex_expr(statement.data, address, writing_address)
+        self._handle_vex_expr(statement.data, address, writing_address, tmp=None)
         self.variables.append(register)
         self.variables.append(self.helper_variable)
         self.solver.add(register == self.helper_variable)
@@ -197,59 +168,66 @@ class ConstraintSolver:
     # Expression Handlers
 
 
-    def _handle_vex_expr_Binder(self, statement, address, writing_address):
+    def _handle_vex_expr_Binder(self, expression, address, writing_address, tmp):
         return NotImplemented
 
-    def _handle_vex_expr_Get(self, statement, address, writing_address):
-        temp = z3.BitVec("t" + str(statement.tmp), 32)
-        register = z3.BitVec("r" + str(statement.data.offset), 32)
-        self.solver.add(temp == register)
+    def _handle_vex_expr_Get(self, expression, address, writing_address, tmp):
+        register = z3.BitVec("r" + str(expression.offset), 32)
+        self.solver.add(tmp == register)
         self.variables.append(register)
-        self.variables.append(temp)
+        self.variables.append(tmp)
 
-    def _handle_vex_expr_GetI(self, statement, address, writing_address):
+    def _handle_vex_expr_GetI(self, expression, address, writing_address, tmp):
         return NotImplemented
 
-    def _handle_vex_expr_RdTmp(self, statement, address, writing_address):
-        self.helper_variable = z3.BitVec("t" + str(statement.tmp), 32)
+    def _handle_vex_expr_RdTmp(self, expression, address, writing_address, tmp):
+        self.helper_variable = z3.BitVec("t" + str(expression.tmp), 32)
 
-    def _handle_vex_expr_Qop(self, statement, address, writing_address):
+    def _handle_vex_expr_Qop(self, expression, address, writing_address, tmp):
         return NotImplemented
 
-    def _handle_vex_expr_Triop(self, statement, address, writing_address):
+    def _handle_vex_expr_Triop(self, expression, address, writing_address, tmp):
         return NotImplemented
 
-    def _handle_vex_expr_Binop(self, statement, address, writing_address):
-        temp = z3.BitVec("t" + str(statement.tmp), 32)
-        op1 = z3.BitVec(str(statement.data.args[0]), 32)
-        new_address = statement.data.args[1].con.value - address + writing_address
+    def _handle_vex_expr_Binop(self, expression, address, writing_address, tmp):
+        op1 = z3.BitVec(str(expression.args[0]), 32)
+        new_address = expression.args[1].con.value - address + writing_address
         op2 = z3.BitVecVal(new_address, 32)
-        if statement.data.op == "Iop_Add32":
-            self.solver.add(temp == op1 + op2)
-        self.variables.append(temp)
+        if expression.op == "Iop_Add32":
+            self.solver.add(tmp == op1 + op2)
 
-    def _handle_vex_expr_Unop(self, statement, address, writing_address):
+        if expression.op == "CmpNE32":
+            self.solver.add(tmp == op1 - op2)
+        self.variables.append(tmp)
+
+    def _handle_vex_expr_Unop(self, expression, address, writing_address, tmp):
         return NotImplemented
 
-    def _handle_vex_expr_Load(self, statement, address, writing_address):
-        temp = z3.BitVec("t" + str(statement.tmp), 32)
-        load = z3.BitVec(str(statement.data.addr), 32)
-        self.solver.add(temp == load)
+    def _handle_vex_expr_Load(self, expression, address, writing_address, tmp):
+        load = z3.BitVec(str(expression.addr), 32)
+        self.solver.add(tmp == load)
         self.variables.append(load)
-        self.variables.append(temp)
+        self.variables.append(tmp)
 
-    def _handle_vex_expr_Const(self, statement, address, writing_address):
-        self.helper_variable = z3.BitVecVal(statement.con.value, 32)
+    def _handle_vex_expr_Const(self, expression, address, writing_address, tmp):
+        self.helper_variable = z3.BitVecVal(expression.con.value, 32)
 
-    def _handle_vex_expr_ITE(self, statement, address, writing_address):
+    def _handle_vex_expr_ITE(self, expression, address, writing_address, tmp):
+        self._handle_vex_expr(expression.cond, address, writing_address, tmp)
+        cond = self.helper_variable
+        self._handle_vex_expr(expression.iftrue, address, writing_address, tmp)
+        true = self.helper_variable
+        false = self.helper_variable
+        condition = z3.If(cond == 0, true, false)
+        self.solver.add(tmp == condition)
         return NotImplemented
 
-    def _handle_vex_expr_CCall(self, statement, address, writing_address):
+    def _handle_vex_expr_CCall(self, expression, address, writing_address, tmp):
         return NotImplemented
 
-    def _handle_vex_expr_VECRET(self, statement, address, writing_address):
+    def _handle_vex_expr_VECRET(self, expression, address, writing_address, tmp):
         return NotImplemented
 
-    def _handle_vex_expr_GSPTR(self, statement, address, writing_address):
+    def _handle_vex_expr_GSPTR(self, expression, address, writing_address, tmp):
         return NotImplemented
 
