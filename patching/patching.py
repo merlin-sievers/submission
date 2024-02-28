@@ -242,6 +242,7 @@ class Patching:
         # Extract the first match (assuming there is at least one match)
         register_name = matches[0]
 
+
         # TODO: Difference now assumes there are no more shifts than 32 bytes (pc + 28). That is a random guess.
 
         difference = reference.toAddr - reference.fromAddr
@@ -619,4 +620,12 @@ class Patching:
         return modified_string
 
 
-
+    @staticmethod
+    def get_register_from_instruction(instruction, arch):
+        register_pattern = re.compile(r'(r\d+|sb|sl)')
+        # Find all matches in the instruction string
+        matches = register_pattern.findall(instruction.op_str)
+        # Extract the first match (assuming there is at least one match)
+        register_name = matches[0]
+        reg = arch.get_register_offset(register_name)
+        return reg

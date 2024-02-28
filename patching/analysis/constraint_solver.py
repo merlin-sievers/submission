@@ -190,9 +190,10 @@ class ConstraintSolver:
         return NotImplemented
 
     def _handle_vex_expr_Binop(self, expression, address, writing_address, tmp):
-        op1 = z3.BitVec(str(expression.args[0]), 32)
-        new_address = expression.args[1].con.value - address + writing_address
-        op2 = z3.BitVecVal(new_address, 32)
+        self._handle_vex_expr(expression.args[0], address, writing_address, tmp)
+        op1 = self.helper_variable
+        self._handle_vex_expr(expression.args[1], address, writing_address, tmp)
+        op2 = self.helper_variable
         if expression.op == "Iop_Add32":
             self.solver.add(tmp == op1 + op2)
 
@@ -208,9 +209,14 @@ class ConstraintSolver:
         self.solver.add(tmp == load)
         self.variables.append(load)
         self.variables.append(tmp)
-
+    # TODO: Validate that i consider every constant bigger than 20000 to be an address
     def _handle_vex_expr_Const(self, expression, address, writing_address, tmp):
-        self.helper_variable = z3.BitVecVal(expression.con.value, 32)
+        new_address = expression.con.value - address + writing_address
+        if expression.con.value > 20000:
+            self.helper_variable = z3.BitVecVal(new_address, 32)
+        else:
+            self.helper_variable = z3.BitVecVal(expression.con.value, 32)
+
 
     def _handle_vex_expr_ITE(self, expression, address, writing_address, tmp):
         self._handle_vex_expr(expression.cond, address, writing_address, tmp)

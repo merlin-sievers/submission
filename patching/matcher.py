@@ -109,7 +109,7 @@ class RefMatcher:
                             self.match_to_new_address[ref_patch.toAddr] = ref_vuln
 
     def get_refs(self, project):
-
+        # TODO make independent from function name
         target_function = project.loader.find_symbol("png_check_keyword")
         cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs,
                                            context_sensitivity_level=0, starts=[target_function.rebased_addr])
@@ -130,6 +130,8 @@ class RefMatcher:
 
 
         refs = project.analyses.XRefs(func=target_function.rebased_addr)
+        if refs is None:
+            return xrefs
 
         for refAddr in refs.kb.xrefs.xrefs_by_ins_addr:
             for r in refs.kb.xrefs.xrefs_by_ins_addr[refAddr]:
