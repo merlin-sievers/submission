@@ -1,6 +1,6 @@
-from collections import defaultdict
 from angrutils import *
 import angr, monkeyhex, archinfo
+import re
 import logging
 import claripy
 import networkx
@@ -20,23 +20,25 @@ from variable_backward_slicing import VariableBackwardSlicing
 # loading the patch binary to perform backward slicing
 project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs= False)
 
+# project = angr.Project("Testsuite/vuln_test", auto_load_libs= False)
+
 # Getting the target function
 target_function = project.loader.find_symbol("png_check_keyword")
 
 # Getting the target block to be able to manually verify the backward slicing
-target_block = project.factory.block(addr=0x4049f5)
-target_block.vex.pp()
+# target_block = project.factory.block(addr=0x4049f5)
+# target_block.vex.pp()
 
 
 # Building the CFGEmulated for the target function in order to be able to build the DDG
-cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[target_function.rebased_addr])
+cfg = project.analyses.CFGEmulated(keep_state=True,  state_add_options=angr.sim_options.refs, starts=[target_function.rebased_addr])
 # cfg = project.analyses.CFGFast(start=target_function.rebased_addr, end=target_function.rebased_addr+460)
 
 
 
 
 
-refs = project.analyses.XRefs(func=target_function.rebased_addr)
+# refs = project.analyses.XRefs(func=target_function.rebased_addr)
 # print(refs.kb.xrefs.xrefs_by_ins_addr)
 
 # cfg.normalize()
@@ -60,6 +62,22 @@ ddg = project.analyses.DDG(cfg, start=target_function.rebased_addr)
 #     if node.location.ins_addr == 0x4049fb:
 #         print("found", node.variable, node.location)
 
+block = project.factory.block(addr=0x404a1b)
+# print("block disassembly", block.disassembly)
+# block.vex.pp()
+instruction = block.disassembly.insns[4]
+reg = instruction.operands[0].reg
+instruction1 = block.disassembly.insns[2]
+reg1 = instruction1.operands[0].reg
+
+register_pattern = re.compile(r'(r\d+|sb|sl)')
+# Find all matches in the instruction string
+matches = register_pattern.findall(instruction.op_str)
+  # Extract the first match (assuming there is at least one match)
+register_name = matches[0]
+program_var = project.arch
+reg = program_var.get_register_offset(register_name)
+
 # CodeLocations are part of the DDG
 cl1 = CodeLocation(0x404a1b, ins_addr=0x404a25, stmt_idx=63)
 instr_view = ddg.view[0x404a25]
@@ -72,19 +90,30 @@ for definition in definitions:
     print(definition._variable, definition.depends_on)
 #  Now only take the register variables
     if isinstance(definition._variable.variable, SimRegisterVariable):
-        pv1 = pv
-        var = definition._variable.variable
-        loc = [definition._variable.location]
-        print(var)
-        print(loc)
+        if (definition._variable.variable.reg == reg):
+            pv1 = pv
+            var = definition._variable.variable
+            loc = [definition._variable.location]
+            print(var)
+            print(loc)
 
 # block = cfg.get_any_node(cl1.block_addr)
 
-block = project.factory.block(addr=0x404a1b)
-print("block disassembly", block.disassembly)
-block.vex.pp()
 
 
+
+
+
+
+# TODO: THIS IS HOW YOU GET THE CONNECTION BETWEEN A PROGRAMVARIABLE AND THE OFFSET OF A VEX REGISTER
+for ins in block.disassembly.insns:
+    offset = ins.operands[0].reg
+    if pv1.variable.reg == offset:
+        print("found", pv1)
+
+program_var = project.arch
+offste = program_var.get_register_offset("sl")
+reg = program_var.get_register_by_name("sl")
 # Take all definitions of a variable that appear in the DDG
 # found: list = ddg.find_definitions(var, simplified_graph=False)
 # node = cfg.get_any_node(0x4049f5)
