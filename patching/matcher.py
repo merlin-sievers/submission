@@ -110,7 +110,7 @@ class RefMatcher:
 
     def get_refs(self, project):
         # TODO make independent from function name
-        target_function = project.loader.find_symbol("png_check_keyword")
+        target_function = project.loader.find_symbol("_start")
         cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs,
                                            context_sensitivity_level=0, starts=[target_function.rebased_addr])
 

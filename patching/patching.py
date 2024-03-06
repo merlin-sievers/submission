@@ -32,17 +32,21 @@ class Patching:
         self.backend = None
         self.writing_address = None
         # TODO: Add path to the binary as an argument for the configuration
-        self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs= False)
+        # self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs= False)
+        self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test", auto_load_libs= False)
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
 
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
-        self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size
+        help = self.project_vuln.loader.find_symbol(self.patching_config.functionName)
+        self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size + 100
         self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
 
-        self.project_patch = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs = False)
+        # self.project_patch = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs = False)
+        self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/patch_test", auto_load_libs= False)
+
         self.cfg_patch = self.project_patch.analyses.CFGFast()
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
-        self.end_patch = self.entry_point_patch + self.project_patch.loader.find_symbol(self.patching_config.functionName).size
+        self.end_patch = self.entry_point_patch + self.project_patch.loader.find_symbol(self.patching_config.functionName).size + 100
 
         self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_patch])
         self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
@@ -107,7 +111,9 @@ class Patching:
 
         # Jump to new Memory
         print(start_address_of_patch)
-        self.jump_to_new_memory(start_address_of_patch-1, new_memory_address)
+        if self.code_block_start.thumb:
+            start_address_of_patch = start_address_of_patch - 1
+        self.jump_to_new_memory(start_address_of_patch, new_memory_address)
 
         self.cfg_patch.get_any_node(patch_start_address_of_patch)
 
@@ -116,7 +122,7 @@ class Patching:
 
         self.writing_address = new_memory_address
 
-        while patch_block_start_address < self.patch_code_block_end.addr:
+        while patch_block_start_address <= self.patch_code_block_end.addr:
             block_patch = self.project_patch.factory.block(patch_block_start_address)
 
             # Going through every CodeUnit from the BasicBlock
@@ -142,8 +148,8 @@ class Patching:
 
         # Fix all References broken by shifts
         # self.fix_shifts_in_references()
-        self.backend.save("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0_detoured")
-
+        # self.backend.save("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0_detoured")
+        self.backend.save("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test_detoured")
         # Jump back to the original function since the patch is now integrated
 
 
@@ -170,7 +176,7 @@ class Patching:
         """
 
         target_address = str(hex(target_address))
-        patches = [InlinePatch(base_address, "bl " + target_address)]
+        patches = [InlinePatch(base_address, "bl " + target_address, is_thumb=self.code_block_start.thumb)]
         self.backend.apply_patches(patches)
 
 
@@ -274,11 +280,13 @@ class Patching:
         definitions: list = instr_view.definitions
         variable = None
         location = None
+        register = self.get_register_from_instruction(instruction_patch, self.project_patch.arch)
         for definition in definitions:
-        #     Now only take the register variable
+            #     Now only take the register variable
             if isinstance(definition._variable.variable, SimRegisterVariable):
-                variable = definition._variable
-                location = definition._variable.location
+                if (definition._variable.variable.reg == register):
+                    variable = definition._variable
+                    location = [definition._variable.location]
 
         solver = ConstraintSolver(self.project_patch)
         # Calculate Address where the value of the PARAM reference need to be written
@@ -295,6 +303,8 @@ class Patching:
         # Tracking Registers used in the backward slice
         for address in backward_slice.chosen_statements_addrs:
             register_pattern = re.compile(r'(r\d+|sb|sl)')
+            # helper debug variable only
+            instr_help= self.project_patch.factory.block(address).capstone.insns[0]
             # Find all matches in the instruction string
             matches = register_pattern.findall(self.project_patch.factory.block(address).capstone.insns[0].op_str)
             # Extract the first match (assuming there is at least one match)
@@ -499,11 +509,13 @@ class Patching:
         definitions: list = instr_view.definitions
         variable = None
         location = None
+        register = self.get_register_from_instruction(instruction_patch, self.project_patch.arch)
         for definition in definitions:
             #     Now only take the register variable
             if isinstance(definition._variable.variable, SimRegisterVariable):
-                variable = definition._variable.variable
-                location = definition._variable.location
+                if(definition._variable.variable.reg == register):
+                    variable = definition._variable
+                    location = [definition._variable.location]
 
         solver = ConstraintSolver(self.project_patch)
 
