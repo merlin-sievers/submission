@@ -223,6 +223,7 @@ class ConstraintSolver:
         cond = self.helper_variable
         self._handle_vex_expr(expression.iftrue, address, writing_address, tmp)
         true = self.helper_variable
+        self._handle_vex_expr(expression.iffalse, address, writing_address, tmp)
         false = self.helper_variable
         condition = z3.If(cond == 0, true, false)
         self.solver.add(tmp == condition)

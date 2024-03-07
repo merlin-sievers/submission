@@ -1,4 +1,3 @@
-from angrutils import *
 import angr, monkeyhex, archinfo
 import re
 import logging
@@ -9,6 +8,7 @@ from angr.analyses import BackwardSlice, CFGEmulated
 from angr.code_location import CodeLocation
 from angr.sim_variable import SimRegisterVariable
 
+from angrutils import plot_cfg
 from patching.analysis.constraint_solver import ConstraintSolver
 from variable_backward_slicing import VariableBackwardSlicing
 
@@ -20,7 +20,7 @@ from variable_backward_slicing import VariableBackwardSlicing
 # loading the patch binary to perform backward slicing
 # project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs= False)
 
-project = angr.Project("Testsuite/vuln_test.o", auto_load_libs= False)
+project = angr.Project("Testsuite/SimpleTest/simple_test_ti.o", auto_load_libs= False)
 
 # Getting the target function
 # target_function = project.loader.find_symbol("png_check_keyword")
@@ -36,7 +36,7 @@ print(target_block.arch)
 
 # Building the CFGEmulated for the target function in order to be able to build the DDG
 cfg_fast = project.analyses.CFGFast()
-cfg = project.analyses.CFGEmulated(keep_state=True,  state_add_options=angr.sim_options.refs, starts=[target_function.rebased_addr])
+cfg = project.analyses.CFGEmulated(keep_state=True,  state_add_options=angr.sim_options.refs, context_sensitivity_level=2, starts=[target_function.rebased_addr])
 #
 
 
@@ -52,14 +52,14 @@ cfg.normalize()
 # for node in vfg.graph.nodes:
 #     print("VSA", node, type(node))
 #
-plot_cfg(cfg_fast, fname="test_vuln", asminst=True, remove_imports=True, remove_path_terminator=True)
+plot_cfg(cfg, fname="test_vuln", asminst=True, remove_imports=True, remove_path_terminator=True)
 
 print(cfg.graph.size())
 
 
 
 # Getting the DDG
-vulddg = project.analyses.DDG(cfg, start=target_function.rebased_addr+1)
+ddg = project.analyses.DDG(cfg, start=target_function.rebased_addr)
 #
 # plot_ddg_data(ddg.data_sub_graph(), fname="png_check_keyword_ddg", asminst=False)
 
@@ -67,42 +67,42 @@ vulddg = project.analyses.DDG(cfg, start=target_function.rebased_addr+1)
 #     if node.location.ins_addr == 0x4049fb:
 #         print("found", node.variable, node.location)
 
-# block = project.factory.block(addr=0x404a1b)
-# print("block disassembly", block.disassembly)
-# block.vex.pp()
-# instruction = block.disassembly.insns[4]
-# reg = instruction.operands[0].reg
-# instruction1 = block.disassembly.insns[2]
-# reg1 = instruction1.operands[0].reg
+block = project.factory.block(addr=0x404a1b)
+print("block disassembly", block.disassembly)
+block.vex.pp()
+instruction = block.disassembly.insns[4]
+reg = instruction.operands[0].reg
+instruction1 = block.disassembly.insns[2]
+reg1 = instruction1.operands[0].reg
 
-# register_pattern = re.compile(r'(r\d+|sb|sl)')
-# # Find all matches in the instruction string
-# matches = register_pattern.findall(instruction.op_str)
-#   # Extract the first match (assuming there is at least one match)
-# register_name = matches[0]
-# program_var = project.arch
-# reg = program_var.get_register_offset(register_name)
+register_pattern = re.compile(r'(r\d+|sb|sl)')
+# Find all matches in the instruction string
+matches = register_pattern.findall(instruction.op_str)
+  # Extract the first match (assuming there is at least one match)
+register_name = matches[0]
+program_var = project.arch
+reg = program_var.get_register_offset(register_name)
+
+# CodeLocations are part of the DDG
+cl1 = CodeLocation(0x404a1b, ins_addr=0x404a25, stmt_idx=63)
+instr_view = ddg.view[0x404a25]
+# Getting variables and their dependencies form the ddg nodes
+definitions: list = instr_view.definitions
+var = None
+for definition in definitions:
+    pv = definition._variable
+    print(type(definition))
+    print(definition._variable, definition.depends_on)
+#  Now only take the register variables
+    if isinstance(definition._variable.variable, SimRegisterVariable):
+        if (definition._variable.variable.reg == reg):
+            pv1 = pv
+            var = definition._variable.variable
+            loc = [definition._variable.location]
+            print(var)
+            print(loc)
 #
-# # CodeLocations are part of the DDG
-# cl1 = CodeLocation(0x404a1b, ins_addr=0x404a25, stmt_idx=63)
-# instr_view = ddg.view[0x404a25]
-# # Getting variables and their dependencies form the ddg nodes
-# definitions: list = instr_view.definitions
-# var = None
-# for definition in definitions:
-#     pv = definition._variable
-#     print(type(definition))
-#     print(definition._variable, definition.depends_on)
-# #  Now only take the register variables
-#     if isinstance(definition._variable.variable, SimRegisterVariable):
-#         if (definition._variable.variable.reg == reg):
-#             pv1 = pv
-#             var = definition._variable.variable
-#             loc = [definition._variable.location]
-#             print(var)
-#             print(loc)
-#
-# # block = cfg.get_any_node(cl1.block_addr)
+# block = cfg.get_any_node(cl1.block_addr)
 
 
 
@@ -190,4 +190,8 @@ for stat, ids in bs.chosen_statements.items():
 
 constraints = ConstraintSolver(project)
 results = constraints.solve(bs.chosen_statements, 0x400000, 0x2049fb)
+for result , _  in results:
+    testst = str(result)
+    number = re.search(r'\d+', testst).group()
+
 print(results)

@@ -33,16 +33,16 @@ class Patching:
         self.writing_address = None
         # TODO: Add path to the binary as an argument for the configuration
         # self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs= False)
-        self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test", auto_load_libs= False)
+        self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/vuln_test", auto_load_libs= False)
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
 
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
-        help = self.project_vuln.loader.find_symbol(self.patching_config.functionName)
+        # TODO: Find a better option to get the end
         self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size + 100
         self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
 
         # self.project_patch = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs = False)
-        self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/patch_test", auto_load_libs= False)
+        self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test", auto_load_libs= False)
 
         self.cfg_patch = self.project_patch.analyses.CFGFast()
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
@@ -148,8 +148,8 @@ class Patching:
 
         # Fix all References broken by shifts
         # self.fix_shifts_in_references()
-        # self.backend.save("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0_detoured")
-        self.backend.save("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test_detoured")
+        self.backend.save("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0_detoured")
+        # self.backend.save("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test_detoured")
         # Jump back to the original function since the patch is now integrated
 
 
@@ -301,43 +301,36 @@ class Patching:
 
 
         # Tracking Registers used in the backward slice
-        for address in backward_slice.chosen_statements_addrs:
-            register_pattern = re.compile(r'(r\d+|sb|sl)')
-            # helper debug variable only
-            instr_help= self.project_patch.factory.block(address).capstone.insns[0]
-            # Find all matches in the instruction string
-            matches = register_pattern.findall(self.project_patch.factory.block(address).capstone.insns[0].op_str)
-            # Extract the first match (assuming there is at least one match)
-            register_name = matches[0]
-            register = TrackingRegister(register_name, address)
-            self.used_registers.append(register)
+        # for address in backward_slice.chosen_statements_addrs:
+        #     register_pattern = re.compile(r'(r\d+|sb|sl)')
+        #     # helper debug variable only
+        #     instr_help= self.project_patch.factory.block(address).capstone.insns[0]
+        #     # Find all matches in the instruction string
+        #     matches = register_pattern.findall(self.project_patch.factory.block(address).capstone.insns[0].op_str)
+        #     # Extract the first match (assuming there is at least one match)
+        #     if matches != []:
+        #         register_name = matches[0]
+        #         register = TrackingRegister(register_name, address)
+        #         self.used_registers.append(register)
 
 
 
         results = solver.solve(backward_slice.chosen_statements, jump_target, self.writing_address)
 
 
-        for res in self.new_def_registers:
-            if res in self.used_registers:
-                for result , _  in results:
-                    if res.register_name == result:
-                        reg = res
-                        self.new_def_registers.remove(res)
 
 
-        # Calculate bytes of value that needs to be loaded in the previously modified address
+        affected_registers = self.get_affected_registers(results)
 
-        for (register, value) in results:
-            if register == reg.register_name:
-                data = value.to_bytes(4, byteorder='little')
+        for (register, data) in affected_registers:
+            # Write the data to the ldr_data_address
+            patches = [RawMemPatch(register.ldr_data_address, data)]
+            self.backend.apply(patches)
 
-        patches = [RawMemPatch(reg.ldr_data_address, data)]
-
-        self.backend.apply(patches)
 
         self.replacing_add_with_sub(instruction_patch)
 
-        self.writing_address = self.writing_address + len(instruction_patch) * 2
+        self.writing_address = self.writing_address + instruction_patch.size * 2
 
         self.remember_shifted_bytes(2)
 
@@ -358,7 +351,7 @@ class Patching:
 
         # Reference outside of function and outside of patch
             else:
-                self.reassemble_reference_at_different_address(instruction_patch, old_reference, self.writing_address)
+                self.reassemble_reference_at_different_address(instruction_patch, old_reference.toAddr, self.writing_address)
                 self.writing_address = self.writing_address + instruction_patch.size
 
         # Reference inside of patch
@@ -427,7 +420,7 @@ class Patching:
             target_address = self.writing_address + 130
             new_string = self.replace_jump_target_address(instruction_patch, target_address)
 
-            patches = [InlinePatch(target_address, "bl 0x" + real_target_address)]
+            patches = [InlinePatch(target_address, "bl 0x" + str(real_target_address))]
 
             # TODO: Is this really necessary or some ghidra hack? rewritingBytesofCodeUnitToNewAddress(codunneu, codunaddr);
 
@@ -447,9 +440,9 @@ class Patching:
         patches = [InlinePatch(self.writing_address, new_string)]
         self.backend.apply_patches(patches)
 
-    def reassemble_reference_at_different_address(self, instruction_patch, old_reference, writing_address):
+    def reassemble_reference_at_different_address(self, instruction_patch, target_address, writing_address):
 
-        new_string = self.replace_jump_target_address(instruction_patch, old_reference.toAddr + 1)
+        new_string = self.replace_jump_target_address(instruction_patch, target_address)
 
         patches = [InlinePatch(writing_address, new_string)]
         self.backend.apply_patches(patches)
@@ -524,16 +517,16 @@ class Patching:
                                                  cdg=self.cdg_patch_specific,
                                                  project=self.project_patch,
                                                  variable=variable, targets=location)
-
+        # TODO: Check if necessary: Used registers should already appear in solution of constraints of backward slice
         # Tracking Registers used in the backward slice
-        for address in backward_slice.chosen_statements_addrs:
-            register_pattern = re.compile(r'r\d+')
-            # Find all matches in the instruction string
-            matches = register_pattern.findall(self.project_patch.factory.block(address).capstone.insns[0].op_str)
-            # Extract the first match (assuming there is at least one match)
-            register_name = matches[0]
-            register = TrackingRegister(register_name, address)
-            self.used_registers.append(register)
+        # for address in backward_slice.chosen_statements_addrs:
+        #     register_pattern = re.compile(r'r\d+')
+        #     # Find all matches in the instruction string
+        #     matches = register_pattern.findall(self.project_patch.factory.block(address).capstone.insns[0].op_str)
+        #     # Extract the first match (assuming there is at least one match)
+        #     register_name = matches[0]
+        #     register = TrackingRegister(register_name, address)
+        #     self.used_registers.append(register)
 
         # Check what we want here. We could extend the .data .rodata section maybe?? Or just put it at a very far way address in the already extended section
         self.new_memory_data_address = self.new_memory_writing_address + 80
@@ -543,35 +536,27 @@ class Patching:
         if results is None:
             return
 
-        for res in self.new_def_registers:
-            if res in self.used_registers:
-                for result, _ in results:
-                    if res.register_name == result:
-                        reg = res
-                        self.new_def_registers.remove(res)
-            else:
-                return
+        # TODO: What if there is a register in results that is not in the new_def_registers list?  Then there is no information of where to put the data
+        # Get all affected registers, i.e. intersection of new_def_registers and results
+        affected_registers = self.get_affected_registers(results)
 
-        # Calculate bytes of value that needs to be loaded in the previously modified address
 
-        for (register, value) in results:
-            if register == reg.register_name:
-                data = value.to_bytes(4, byteorder='little')
+        for (register, data) in affected_registers:
+            # Write the data to the ldr_data_address
+            patches = [RawMemPatch(register.ldr_data_address, data)]
+            self.backend.apply(patches)
+            data = self.load_data_from_memory(reference.toAddr)
 
-        patches = [RawMemPatch(reg.ldr_data_address, data)]
+            # Write the data to the new memory address
 
-        self.backend.apply(patches)
+            patches = [RawMemPatch(self.new_memory_writing_address, data)]
+            self.backend.apply(patches)
 
-        data = self.load_data_from_memory(reference.toAddr)
-
-        # Write the data to the new memory address
-
-        patches = [RawMemPatch(self.new_memory_writing_address, data)]
-        self.backend.apply(patches)
-
-        self.new_memory_data_address = self.new_memory_data_address + len(data)
+            self.new_memory_data_address = self.new_memory_data_address + len(data)
 
         self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+
+
 
     def load_data_from_memory(self, address):
 
@@ -583,6 +568,24 @@ class Patching:
             data += byte_data
             address += 1
             return data
+
+
+    def get_affected_registers(self, results):
+        affected_registers = []
+
+        for res in self.new_def_registers:
+            for result, value in results:
+                offset = re.search(r'\d+', str(result)).group()
+                reg_offset = self.project_patch.arch.get_register_offset(res.register_name)
+                if reg_offset == offset:
+                    data = value.to_bytes(4, byteorder='little')
+                    affected_registers = (res, data)
+                    self.new_def_registers.remove(res)
+
+        return affected_registers
+
+
+
 
     def fix_shifts_in_references(self, patch_start_address_of_patch):
         pass
@@ -614,6 +617,9 @@ class Patching:
     # newString = replaceJumpAddr(codunHelp, jumpTarget)
     #
     # asm.assemble(refsToBeFixed[0].getFromAddress(), newString)
+
+
+
 
 
     # Static methods

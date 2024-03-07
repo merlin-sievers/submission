@@ -108,6 +108,8 @@ class RefMatcher:
                             self.match_to_old_address[ref_vuln.toAddr] = ref_patch
                             self.match_to_new_address[ref_patch.toAddr] = ref_vuln
 
+
+    # TODO: Make it work for THUMB AND ARM!!!
     def get_refs(self, project):
         # TODO make independent from function name
         target_function = project.loader.find_symbol("_start")
@@ -123,8 +125,8 @@ class RefMatcher:
                 for final in node.final_states:
                     if final.history.jump_source is not None:
                         if final.history.jump_target.concrete:
-                            fromAddr = final.history.jump_source - 1
-                            toAddr = final.history.jump_target.concrete_value - 1
+                            fromAddr = final.history.jump_source
+                            toAddr = final.history.jump_target.concrete_value
                             ref = Reference(fromAddr, toAddr, "control_flow_jump")
                             xrefs.add(ref)
 
@@ -135,7 +137,8 @@ class RefMatcher:
 
         for refAddr in refs.kb.xrefs.xrefs_by_ins_addr:
             for r in refs.kb.xrefs.xrefs_by_ins_addr[refAddr]:
-                fromAddr = r.ins_addr-1
+                # TODO: Fix so that it works for THUMB AND ARM!!!
+                fromAddr = r.ins_addr
                 toAddr = r.dst
                 refType = r.type_string
                 ref = Reference(fromAddr, toAddr, refType)
