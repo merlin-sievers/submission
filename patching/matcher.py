@@ -68,7 +68,7 @@ class RefMatcher:
         self.match_to_new_address = dict()
         self.match_from_old_address = dict()
         self.match_from_new_address = dict()
-
+    # TODO: Make it work for Thumb and ARM
     def match_references_from_perfect_matched_blocks(self, perfect_matches, refs_vuln, refs_patch, project_vuln, project_patch):
         # TODO: Match References if they are in a perfectly matched BasicBlock in the Function and outside of the Function
         self.bindiff_results = project_vuln.analyses.BinDiff(project_patch)
@@ -76,22 +76,22 @@ class RefMatcher:
             for addr in perfect_matches.match_old_address:
                 if addr - 100 <= ref_vuln.fromAddr <= addr + 100:
                     block_vuln = project_vuln.factory.block(addr)
-                    if ref_vuln.fromAddr + 1 in block_vuln.instruction_addrs:
+                    if ref_vuln.fromAddr  in block_vuln.instruction_addrs:
                         i = block_vuln.instruction_addrs.index(block_vuln.addr)
                         for ref_patch in refs_patch:
                             block_patch = project_patch.factory.block(perfect_matches.match_old_address[addr])
                             # if 4244950 <= ref_patch.fromAddr == 4244975:
                             #     print("hellp")
-                            if ref_patch.fromAddr + 1 == block_patch.instruction_addrs[i]:
+                            if ref_patch.fromAddr  == block_patch.instruction_addrs[i]:
                                 self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
                                 self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
                                 self.match_to_old_address[ref_vuln.toAddr] = ref_patch
                                 self.match_to_new_address[ref_patch.toAddr] = ref_vuln
-                    if ref_vuln.toAddr + 1 in block_vuln.instruction_addrs:
+                    if ref_vuln.toAddr  in block_vuln.instruction_addrs:
                         i = block_vuln.instruction_addrs.index(block_vuln.addr)
                         for ref_patch in refs_patch:
                             block_patch = project_patch.factory.block(perfect_matches.match_old_address[addr])
-                            if ref_patch.toAddr + 1 == block_patch.instruction_addrs[i]:
+                            if ref_patch.toAddr  == block_patch.instruction_addrs[i]:
                                 if ref_patch.toAddr in self.match_to_new_address:
                                     pass
                                 else:
@@ -100,9 +100,9 @@ class RefMatcher:
                                     self.match_to_old_address[ref_vuln.toAddr] = ref_patch
                                     self.match_to_new_address[ref_patch.toAddr] = ref_vuln
             for function_addr, _  in self.bindiff_results.function_matches:
-                if ref_vuln.toAddr + 1 == function_addr:
+                if ref_vuln.toAddr  == function_addr:
                     for ref_patch in refs_patch:
-                        if (ref_vuln.toAddr + 1, ref_patch.toAddr + 1) in self.bindiff_results.function_matches:
+                        if (ref_vuln.toAddr, ref_patch.toAddr) in self.bindiff_results.function_matches:
                             self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
                             self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
                             self.match_to_old_address[ref_vuln.toAddr] = ref_patch
@@ -127,8 +127,9 @@ class RefMatcher:
                         if final.history.jump_target.concrete:
                             fromAddr = final.history.jump_source
                             toAddr = final.history.jump_target.concrete_value
-                            ref = Reference(fromAddr, toAddr, "control_flow_jump")
-                            xrefs.add(ref)
+                            if abs(fromAddr - toAddr) > 4:
+                                ref = Reference(fromAddr, toAddr, "control_flow_jump")
+                                xrefs.add(ref)
 
 
         refs = project.analyses.XRefs(func=target_function.rebased_addr)

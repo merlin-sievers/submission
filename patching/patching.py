@@ -36,7 +36,7 @@ class Patching:
         self.writing_address = None
         # TODO: Add path to the binary as an argument for the configuration
         # self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs= False)
-        self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/vuln_test", auto_load_libs= False)
+        self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/vuln_test_2", auto_load_libs= False)
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
 
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
@@ -45,7 +45,7 @@ class Patching:
         self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
 
         # self.project_patch = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs = False)
-        self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test", auto_load_libs= False)
+        self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_2", auto_load_libs= False)
 
         self.cfg_patch = self.project_patch.analyses.CFGFast()
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
@@ -357,10 +357,12 @@ class Patching:
     
         # Check if Reference stays inside of the function -- That means it originally might have been a "b target" thumb instruction that needs to be changed
             if self.entry_point_vuln < old_reference.toAddr < self.end_vuln:
-
-                self.reassemble_reference_at_different_address_thumb(instruction_patch, old_reference)
-                self.writing_address = self.writing_address + (instruction_patch.size * 2)
-                self.remember_shifted_bytes(4)
+                if self.is_thumb:
+                    self.reassemble_reference_at_different_address_thumb(instruction_patch, old_reference)
+                    self.writing_address = self.writing_address + (instruction_patch.size * 2)
+                    self.remember_shifted_bytes(4)
+                else:
+                    self.reassemble_reference_at_different_address(instruction_patch, old_reference.toAddr, self.writing_address)
 
         # Reference outside of function and outside of patch
             else:
@@ -453,9 +455,11 @@ class Patching:
         self.backend.apply_patches(patches)
 
     def reassemble_reference_at_different_address(self, instruction_patch, target_address, writing_address):
-
-        target_address = target_address - writing_address
-        new_string = self.replace_jump_target_address(instruction_patch, target_address)
+        if 'pc' in instruction_patch.op_str:
+            target_address = target_address - writing_address
+            new_string = self.replace_jump_target_address(instruction_patch, target_address)
+        else:
+            new_string = self.replace_jump_target_address(instruction_patch, target_address)
 
         patches = [InlinePatch(writing_address, new_string, is_thumb=self.is_thumb)]
         self.backend.apply_patches(patches)
@@ -468,6 +472,8 @@ class Patching:
             self.add_read_reference(instruction_patch, reference, matched_refs)
         elif reference.refType == "offset":
             self.add_offset_reference(reference, instruction_patch)
+        elif reference.refType == "control_flow_jump":
+            self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
 
 
     def add_read_reference(self, instruction_patch, reference, matched_refs):

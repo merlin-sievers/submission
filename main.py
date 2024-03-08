@@ -20,7 +20,7 @@ from variable_backward_slicing import VariableBackwardSlicing
 # loading the patch binary to perform backward slicing
 # project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs= False)
 
-project = angr.Project("Testsuite/SimpleTest/simple_test_ti.o", auto_load_libs= False)
+project = angr.Project("Testsuite/ReferenceTest/vuln_test_2.o", auto_load_libs= False)
 
 # Getting the target function
 # target_function = project.loader.find_symbol("png_check_keyword")
