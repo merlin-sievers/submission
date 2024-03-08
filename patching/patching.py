@@ -28,6 +28,9 @@ class Patching:
         self.code_block_start = None
         self.code_block_end = None
 
+        self.is_thumb = False
+
+
         self.patching_config = patching_config
         self.backend = None
         self.writing_address = None
@@ -51,6 +54,9 @@ class Patching:
         self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_patch])
         self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
         self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
+
+        self.refs_patch= None
+
 
         self.new_def_registers = []
         self.used_registers = []
@@ -76,10 +82,10 @@ class Patching:
         # Getting all References from both the vulnerable Program and the patch Program
         matched_refs = RefMatcher()
         refs_vuln = matched_refs.get_refs(self.project_vuln)
-        refs_patch = matched_refs.get_refs(self.project_patch)
+        self.refs_patch = matched_refs.get_refs(self.project_patch)
 
         # Match all References
-        matched_refs.match_references_from_perfect_matched_blocks(perfect_matches, refs_vuln, refs_patch, self.project_vuln, self.project_patch)
+        matched_refs.match_references_from_perfect_matched_blocks(perfect_matches, refs_vuln, self.refs_patch, self.project_vuln, self.project_patch)
         s = matched_refs.match_from_new_address
         # Preparation for writing the Patch in the vulnerable Version
 
@@ -124,13 +130,13 @@ class Patching:
 
         while patch_block_start_address <= self.patch_code_block_end.addr:
             block_patch = self.project_patch.factory.block(patch_block_start_address)
-
+            self.is_thumb = block_patch.thumb
             # Going through every CodeUnit from the BasicBlock
             for instruction_patch in block_patch.capstone.insns:
 
                 # Implement the following to use Angr References
 
-                reference = self.get_references_from_instruction(instruction_patch, refs_patch, block_patch.thumb)
+                reference = self.get_references_from_instruction(instruction_patch, self.refs_patch, block_patch.thumb)
 
                 # Handling of possible References
                 if reference is not None:
@@ -148,8 +154,8 @@ class Patching:
 
         # Fix all References broken by shifts
         # self.fix_shifts_in_references()
-        self.backend.save("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0_detoured")
-        # self.backend.save("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test_detoured")
+        # self.backend.save("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0_detoured")
+        self.backend.save("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test_detoured")
         # Jump back to the original function since the patch is now integrated
 
 
@@ -187,19 +193,26 @@ class Patching:
         :param refs:
         :return: Reference or None
         """
+        references = []
         for ref in refs:
             if thumb:
                 if ref.fromAddr == instruction.address - 1:
-                    return ref
+                    references.append(ref)
+                    if ref.refType == "read":
+                        return ref
                 else:
                     pass
             else:
                 if ref.fromAddr == instruction.address:
-                    return ref
+                    references.append(ref)
+                    if ref.refType == "read":
+                        return ref
                 else:
                     pass
+        if len(references) >= 1:
+            return references[0]
 
-    def handle_references(self, reference, matched_refs, instruction_patch):
+    def  handle_references(self, reference, matched_refs, instruction_patch):
         """
         See if Reference is a matched Address, then use the matched Reference instead
 
@@ -224,7 +237,7 @@ class Patching:
                 self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
                 self.writing_address = self.writing_address + instruction_patch.size
             else:
-                self.add_new_reference(instruction_patch, reference)
+                self.add_new_reference(instruction_patch, reference, matched_refs)
 
     def rewriting_bytes_of_code_unit_to_new_address(self, instruction, address):
         """
@@ -360,11 +373,10 @@ class Patching:
             self.writing_address = self.writing_address + instruction_patch.size
 
 
-    def add_new_reference(self, instruction_patch, reference):
+    def add_new_reference(self, instruction_patch, reference, matched_refs):
 
         if self._reference_outside_of_patch(self.patch_code_block_start, self.patch_code_block_end, reference):
-            self.rewriting_and_adding_reference_to_the_old_program(reference, instruction_patch)
-            self.writing_address = self.writing_address + 4
+            self.rewriting_and_adding_reference_to_the_old_program(reference, instruction_patch, matched_refs)
         else:
             self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
             self.writing_address = self.writing_address + instruction_patch.size
@@ -442,22 +454,23 @@ class Patching:
 
     def reassemble_reference_at_different_address(self, instruction_patch, target_address, writing_address):
 
+        target_address = target_address - writing_address
         new_string = self.replace_jump_target_address(instruction_patch, target_address)
 
-        patches = [InlinePatch(writing_address, new_string)]
+        patches = [InlinePatch(writing_address, new_string, is_thumb=self.is_thumb)]
         self.backend.apply_patches(patches)
 
-    def rewriting_and_adding_reference_to_the_old_program(self, reference, instruction_patch):
+    def rewriting_and_adding_reference_to_the_old_program(self, reference, instruction_patch, matched_refs):
 
         # Distinguish two cases 1. Read(e.g.ldr..) 2. Param(e.g.add...)
 
         if reference.refType == "read":
-            self.add_read_reference(instruction_patch)
+            self.add_read_reference(instruction_patch, reference, matched_refs)
         elif reference.refType == "offset":
             self.add_offset_reference(reference, instruction_patch)
 
 
-    def add_read_reference(self, instruction_patch):
+    def add_read_reference(self, instruction_patch, reference, matched_refs):
 
         # Tracking register
 
@@ -469,30 +482,64 @@ class Patching:
         # Extract the first match (assuming there is at least one match)
         register_name = matches[0]
 
-        # Jump to new memory
-        patches = [InlinePatch(self.writing_address, "bl 0x" + str(self.new_memory_writing_address))]
-        self.backend.apply_patches(patches)
+        # Copy the bytes to the vuln program
+        self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
 
-        if instruction_patch.size == 2:
-            self.remember_shifted_bytes(2)
+        # Calculate data address (relative to pc)
+        data_address = self.writing_address + (reference.toAddr - reference.fromAddr)
+
+        # Check if there is an offset reference as well from this instruction
+        offset_reference = self.get_offset_reference_from_instruction(instruction_patch)
+        # Check if the offset reference is perfectly matched
+        if offset_reference is not None:
+            # If it is perfectly match we can just take the value of the offset address and write it at the address of the reference.toAddr
+            if offset_reference.toAddr in matched_refs.match_to_new_address:
+                new_target = matched_refs.match_to_new_address[offset_reference.toAddr]
+                data = new_target.to_bytes(4, byteorder='little')
+                patches = [RawMemPatch(data_address, data)]
+                self.backend.apply_patches(patches)
+            # Else we need to add the actual data to the new memory as well...
+            else:
+                # Get the data we need to add to the vulnerable program
+                data = self.load_data_from_memory(offset_reference.toAddr)
+                patches = [RawMemPatch(self.new_memory_writing_address, data)]
+                # Write the address of the data as a data to be read
+                self.backend.apply_patches(patches)
+                data_to_be_read = self.new_memory_writing_address.to_bytes(4, byteorder='little')
+
+                patches = [RawMemPatch(data_address, data_to_be_read)]
+                self.backend.apply_patches(patches)
+                self.new_memory_writing_address = self.new_memory_writing_address + len(data) + 4
+
+
+        self.writing_address = self.writing_address + instruction_patch.size
+
+
+        # # Jump to new memory
+        # hex_new_memory_writing_address = hex(self.new_memory_writing_address)
+        # patches = [InlinePatch(self.writing_address, "bl " + hex_new_memory_writing_address, is_thumb=self.is_thumb)]
+        # self.backend.apply_patches(patches)
+        #
+        # if instruction_patch.size == 2:
+        #     self.remember_shifted_bytes(2)
 
         # At the new memory address put the instruction with the load Reference
-        target_address = self.new_memory_writing_address + 12
+        # target_address = self.new_memory_writing_address + 12
 
-        self.reassemble_reference_at_different_address(instruction_patch, target_address, self.new_memory_writing_address)
-        self.new_memory_writing_address = self.new_memory_writing_address + instruction_patch.size
+        # self.reassemble_reference_at_different_address(instruction_patch, target_address, self.new_memory_writing_address)
+        # self.new_memory_writing_address = self.new_memory_writing_address + instruction_patch.size
 
         # Save this load data address in the corresponding register
-        register = TrackingRegister(register_name, target_address)
+        register = TrackingRegister(register_name, data_address)
         
         # Add the register to the list of registers that need to be tracked
         self.new_def_registers.append(register)
 
         # Write the jump back to the original code
-        patches = [InlinePatch(self.new_memory_writing_address, "bx lr")]
+        # patches = [InlinePatch(self.new_memory_writing_address, "bx lr", is_thumb=self.is_thumb)]
 
-        self.backend.apply_patches(patches)
-        self.new_memory_writing_address = target_address + 8
+        # self.backend.apply_patches(patches)
+        # self.new_memory_writing_address = target_address + 8
 
     def add_offset_reference(self, reference, instruction_patch):
 
@@ -567,7 +614,7 @@ class Patching:
                 break
             data += byte_data
             address += 1
-            return data
+        return data
 
 
     def get_affected_registers(self, results):
@@ -584,8 +631,19 @@ class Patching:
 
         return affected_registers
 
-
-
+    def get_offset_reference_from_instruction(self, instruction_patch):
+        for ref in self.refs_patch:
+            if self.is_thumb:
+                if ref.fromAddr == instruction_patch.address - 1:
+                    if ref.refType == "offset":
+                        return ref
+                else:
+                    pass
+            elif ref.fromAddr == instruction_patch.address:
+                if ref.refType == "offset":
+                    return ref
+                else:
+                    pass
 
     def fix_shifts_in_references(self, patch_start_address_of_patch):
         pass
