@@ -36,7 +36,7 @@ class Patching:
         self.writing_address = None
         # TODO: Add path to the binary as an argument for the configuration
         # self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs= False)
-        self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/vuln_test_2", auto_load_libs= False)
+        self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/vuln_test_3", auto_load_libs= False)
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
 
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
@@ -45,7 +45,7 @@ class Patching:
         self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
 
         # self.project_patch = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs = False)
-        self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_2", auto_load_libs= False)
+        self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_3", auto_load_libs= False)
 
         self.cfg_patch = self.project_patch.analyses.CFGFast()
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
@@ -224,11 +224,11 @@ class Patching:
 
         # First check if from Address of Reference is perfectly matched
         if reference.fromAddr in matched_refs.match_from_new_address:
-            self.handle_matched_reference(reference, matched_refs.match_from_new_address[reference.fromAddr], instruction_patch)
+            self.handle_matched_reference(reference, matched_refs.match_from_new_address[reference.fromAddr], instruction_patch, matched_refs)
 
         # Check if the To Address of the Reference is perfectly matched
         elif reference.toAddr in matched_refs.match_to_new_address:
-            self.handle_matched_reference(reference, matched_refs.match_to_new_address[reference.toAddr], instruction_patch)
+            self.handle_matched_reference(reference, matched_refs.match_to_new_address[reference.toAddr], instruction_patch, matched_refs)
 
         # If the Reference is not perfectly matched
         else:
@@ -274,7 +274,7 @@ class Patching:
         # Replacing the reference with the new target address
         new_instruction_string = self.replace_jump_target_address(instruction_patch, difference)
 
-        patches = [InlinePatch(self.writing_address, new_instruction_string)]
+        patches = [InlinePatch(self.writing_address, new_instruction_string, is_thumb=self.is_thumb)]
         self.backend.apply_patches(patches)
 
         # Tracking the address that will be read from
@@ -341,11 +341,20 @@ class Patching:
             self.backend.apply(patches)
 
 
+
+        # TODO: Implement this
         self.replacing_add_with_sub(instruction_patch)
 
-        self.writing_address = self.writing_address + instruction_patch.size * 2
+        if self.is_thumb:
+            self.writing_address = self.writing_address + instruction_patch.size * 2
+            self.remember_shifted_bytes(2)
 
-        self.remember_shifted_bytes(2)
+        else:
+            self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+            self.writing_address = self.writing_address + instruction_patch.size
+
+
+
 
     def replacing_add_with_sub(self, instruction_patch):
         pass
@@ -383,13 +392,14 @@ class Patching:
             self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
             self.writing_address = self.writing_address + instruction_patch.size
 
-    def handle_matched_reference(self, reference, old_reference, instruction_patch):
+    def handle_matched_reference(self, reference, old_reference, instruction_patch, matched_refs):
         ref_type = reference.refType
 
         # Depending on the type of the reference there are now different ways to proceed:
         # First READ reference
         if ref_type == "read":
-            self.handle_read_reference(instruction_patch, old_reference)
+            self.add_read_reference(instruction_patch, reference, matched_refs)
+            # self.handle_read_reference(instruction_patch, old_reference)
 
         # Then OFFSET reference
         elif ref_type == "offset":
@@ -501,7 +511,7 @@ class Patching:
             # If it is perfectly match we can just take the value of the offset address and write it at the address of the reference.toAddr
             if offset_reference.toAddr in matched_refs.match_to_new_address:
                 new_target = matched_refs.match_to_new_address[offset_reference.toAddr]
-                data = new_target.to_bytes(4, byteorder='little')
+                data = new_target.toAddr.to_bytes(4, byteorder='little')
                 patches = [RawMemPatch(data_address, data)]
                 self.backend.apply_patches(patches)
             # Else we need to add the actual data to the new memory as well...
@@ -608,7 +618,7 @@ class Patching:
             self.new_memory_data_address = self.new_memory_data_address + len(data)
 
         self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
-
+        self.writing_address = self.writing_address + instruction_patch.size
 
 
     def load_data_from_memory(self, address):

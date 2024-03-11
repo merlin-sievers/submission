@@ -73,40 +73,42 @@ class RefMatcher:
         # TODO: Match References if they are in a perfectly matched BasicBlock in the Function and outside of the Function
         self.bindiff_results = project_vuln.analyses.BinDiff(project_patch)
         for ref_vuln in refs_vuln:
-            for addr in perfect_matches.match_old_address:
-                if addr - 100 <= ref_vuln.fromAddr <= addr + 100:
-                    block_vuln = project_vuln.factory.block(addr)
-                    if ref_vuln.fromAddr  in block_vuln.instruction_addrs:
-                        i = block_vuln.instruction_addrs.index(block_vuln.addr)
+            if ref_vuln.refType != "read":
+                for addr in perfect_matches.match_old_address:
+                    if addr - 100 <= ref_vuln.fromAddr <= addr + 100:
+                        block_vuln = project_vuln.factory.block(addr)
+                        if ref_vuln.fromAddr  in block_vuln.instruction_addrs:
+                            i = block_vuln.instruction_addrs.index(ref_vuln.fromAddr)
+                            for ref_patch in refs_patch:
+                                if ref_patch.refType != "read":
+                                    block_patch = project_patch.factory.block(perfect_matches.match_old_address[addr])
+                                    if ref_patch.fromAddr  == block_patch.instruction_addrs[i]:
+
+                                        self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
+                                        self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
+                                        self.match_to_old_address[ref_vuln.toAddr] = ref_patch
+                                        self.match_to_new_address[ref_patch.toAddr] = ref_vuln
+                        if ref_vuln.toAddr  in block_vuln.instruction_addrs:
+                            i = block_vuln.instruction_addrs.index(ref_vuln.fromAddr)
+                            for ref_patch in refs_patch:
+                                if ref_patch.refType != "read":
+                                    block_patch = project_patch.factory.block(perfect_matches.match_old_address[addr])
+                                    if ref_patch.toAddr  == block_patch.instruction_addrs[i]:
+                                        if ref_patch.toAddr in self.match_to_new_address:
+                                            pass
+                                        else:
+                                            self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
+                                            self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
+                                            self.match_to_old_address[ref_vuln.toAddr] = ref_patch
+                                            self.match_to_new_address[ref_patch.toAddr] = ref_vuln
+                for function_addr, _  in self.bindiff_results.function_matches:
+                    if ref_vuln.toAddr  == function_addr:
                         for ref_patch in refs_patch:
-                            block_patch = project_patch.factory.block(perfect_matches.match_old_address[addr])
-                            # if 4244950 <= ref_patch.fromAddr == 4244975:
-                            #     print("hellp")
-                            if ref_patch.fromAddr  == block_patch.instruction_addrs[i]:
+                            if (ref_vuln.toAddr, ref_patch.toAddr) in self.bindiff_results.function_matches:
                                 self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
                                 self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
                                 self.match_to_old_address[ref_vuln.toAddr] = ref_patch
                                 self.match_to_new_address[ref_patch.toAddr] = ref_vuln
-                    if ref_vuln.toAddr  in block_vuln.instruction_addrs:
-                        i = block_vuln.instruction_addrs.index(block_vuln.addr)
-                        for ref_patch in refs_patch:
-                            block_patch = project_patch.factory.block(perfect_matches.match_old_address[addr])
-                            if ref_patch.toAddr  == block_patch.instruction_addrs[i]:
-                                if ref_patch.toAddr in self.match_to_new_address:
-                                    pass
-                                else:
-                                    self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
-                                    self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
-                                    self.match_to_old_address[ref_vuln.toAddr] = ref_patch
-                                    self.match_to_new_address[ref_patch.toAddr] = ref_vuln
-            for function_addr, _  in self.bindiff_results.function_matches:
-                if ref_vuln.toAddr  == function_addr:
-                    for ref_patch in refs_patch:
-                        if (ref_vuln.toAddr, ref_patch.toAddr) in self.bindiff_results.function_matches:
-                            self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
-                            self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
-                            self.match_to_old_address[ref_vuln.toAddr] = ref_patch
-                            self.match_to_new_address[ref_patch.toAddr] = ref_vuln
 
 
     # TODO: Make it work for THUMB AND ARM!!!
