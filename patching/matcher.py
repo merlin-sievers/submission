@@ -72,29 +72,31 @@ class RefMatcher:
     def match_references_from_perfect_matched_blocks(self, perfect_matches, refs_vuln, refs_patch, project_vuln, project_patch):
         # TODO: Match References if they are in a perfectly matched BasicBlock in the Function and outside of the Function
         self.bindiff_results = project_vuln.analyses.BinDiff(project_patch)
+        thumb = 0
         for ref_vuln in refs_vuln:
             if ref_vuln.refType != "read":
                 for addr in perfect_matches.match_old_address:
                     if addr - 100 <= ref_vuln.fromAddr <= addr + 100:
                         block_vuln = project_vuln.factory.block(addr)
-                        if ref_vuln.fromAddr  in block_vuln.instruction_addrs:
-                            i = block_vuln.instruction_addrs.index(ref_vuln.fromAddr)
+                        if block_vuln.thumb == True:
+                            thumb = 1
+                        if ref_vuln.fromAddr + thumb in block_vuln.instruction_addrs:
+                            i = block_vuln.instruction_addrs.index(ref_vuln.fromAddr + thumb)
                             for ref_patch in refs_patch:
                                 if ref_patch.refType != "read":
                                     block_patch = project_patch.factory.block(perfect_matches.match_old_address[addr])
-                                    if ref_patch.fromAddr  == block_patch.instruction_addrs[i]:
-
+                                    if ref_patch.fromAddr + thumb  == block_patch.instruction_addrs[i]:
                                         self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
                                         self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
                                         self.match_to_old_address[ref_vuln.toAddr] = ref_patch
                                         self.match_to_new_address[ref_patch.toAddr] = ref_vuln
-                        if ref_vuln.toAddr  in block_vuln.instruction_addrs:
-                            i = block_vuln.instruction_addrs.index(ref_vuln.fromAddr)
+                        if ref_vuln.toAddr + thumb  in block_vuln.instruction_addrs:
+                            i = block_vuln.instruction_addrs.index(ref_vuln.fromAddr + thumb)
                             for ref_patch in refs_patch:
                                 if ref_patch.refType != "read":
                                     block_patch = project_patch.factory.block(perfect_matches.match_old_address[addr])
-                                    if ref_patch.toAddr  == block_patch.instruction_addrs[i]:
-                                        if ref_patch.toAddr in self.match_to_new_address:
+                                    if ref_patch.toAddr + thumb == block_patch.instruction_addrs[i]:
+                                        if ref_patch.toAddr + thumb in self.match_to_new_address:
                                             pass
                                         else:
                                             self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
@@ -102,9 +104,9 @@ class RefMatcher:
                                             self.match_to_old_address[ref_vuln.toAddr] = ref_patch
                                             self.match_to_new_address[ref_patch.toAddr] = ref_vuln
                 for function_addr, _  in self.bindiff_results.function_matches:
-                    if ref_vuln.toAddr  == function_addr:
+                    if ref_vuln.toAddr + thumb == function_addr:
                         for ref_patch in refs_patch:
-                            if (ref_vuln.toAddr, ref_patch.toAddr) in self.bindiff_results.function_matches:
+                            if (ref_vuln.toAddr + thumb, ref_patch.toAddr + thumb) in self.bindiff_results.function_matches:
                                 self.match_from_old_address[ref_vuln.fromAddr] = ref_patch
                                 self.match_from_new_address[ref_patch.fromAddr] = ref_vuln
                                 self.match_to_old_address[ref_vuln.toAddr] = ref_patch
@@ -114,7 +116,7 @@ class RefMatcher:
     # TODO: Make it work for THUMB AND ARM!!!
     def get_refs(self, project):
         # TODO make independent from function name
-        target_function = project.loader.find_symbol("_start")
+        target_function = project.loader.find_symbol("png_check_keyword")
         cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs,
                                            context_sensitivity_level=0, starts=[target_function.rebased_addr])
 
