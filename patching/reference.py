@@ -6,6 +6,7 @@ class Reference:
 
 
 class TrackingRegister:
-    def __init__(self, register_name, ldr_data_address):
+    def __init__(self, register_name, ldr_data_address, old_ldr_data_address):
         self.register_name = register_name
         self.ldr_data_address = ldr_data_address
+        self.old_ldr_data_address = old_ldr_data_address

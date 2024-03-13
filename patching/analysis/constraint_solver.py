@@ -84,17 +84,6 @@ class ConstraintSolver:
         return results
 
 
-        #             if (isPatchMemory):
-        # #  Need to ADD four since SUB instruction is 4 bit longer than the ADD instruction;
-        #                 subPlusFour = Integer.parseInt(variable.toString())
-        #                 subPlusFour = subPlusFour + 4
-        #
-        #                 relevantRegister.value = subPlusFour
-        #                 results.add(relevantRegister)
-        #             else:
-        #                 relevantRegister.value = Integer.parseInt(variable.toString())
-        #                 results.add(relevantRegister)
-
     def handle_vex_statement(self, stmt: pyvex.stmt.IRStmt, address, writing_address):
         handler = self._vex_stmt_handlers[stmt.tag_int]
         handler(stmt, address, writing_address)

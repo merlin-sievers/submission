@@ -35,8 +35,8 @@ class Patching:
         self.backend = None
         self.writing_address = None
         # TODO: Add path to the binary as an argument for the configuration
-        self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs= False)
-        # self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/vuln_test_3", auto_load_libs= False)
+        # self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs= False)
+        self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/vuln_test_3", auto_load_libs= False)
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
 
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
@@ -44,8 +44,8 @@ class Patching:
         self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size + 100
         self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
 
-        self.project_patch = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs = False)
-        # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_3", auto_load_libs= False)
+        # self.project_patch = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs = False)
+        self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
 
         self.cfg_patch = self.project_patch.analyses.CFGFast()
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
@@ -89,8 +89,8 @@ class Patching:
         s = matched_refs.match_from_new_address
         # Preparation for writing the Patch in the vulnerable Version
 
-        vulnerable_blocks = perfect_matches.get_not_matched_blocks(self.cfg_vuln, self.entry_point_vuln, self.end_vuln, perfect_matches.match_old_address)
-        patch_blocks = perfect_matches.get_not_matched_blocks(self.cfg_patch, self.entry_point_patch, self.end_patch, perfect_matches.match_new_address)
+        vulnerable_blocks = perfect_matches.get_not_matched_blocks(self.cfge_vuln_specific, self.entry_point_vuln, self.end_vuln, perfect_matches.match_old_address)
+        patch_blocks = perfect_matches.get_not_matched_blocks(self.cfge_patch_specific, self.entry_point_patch, self.end_patch, perfect_matches.match_new_address)
 
         start_address_of_patch = min(vulnerable_blocks)
 
@@ -108,6 +108,9 @@ class Patching:
         # CURRENTLY: We try to use lief to extend the last section of the LOAD segment
 
         file_to_be_patched = SectionExtender(binary_fname, 1024).extend_last_section_of_segment()
+
+        # file_to_be_patched = SectionExtender(binary_fname, 1024).add_section()
+
 
         self.backend = DetourBackend(file_to_be_patched)
         new_memory_address = self.project_vuln.loader.main_object.segments[0].vaddr + self.project_vuln.loader.main_object.segments[0].memsize
@@ -195,22 +198,27 @@ class Patching:
         """
         references = []
         for ref in refs:
-            if thumb:
-                if ref.fromAddr == instruction.address - 1:
-                    references.append(ref)
-                    if ref.refType == "read":
-                        return ref
-                else:
-                    pass
-            else:
-                if ref.fromAddr == instruction.address:
-                    references.append(ref)
-                    if ref.refType == "read":
-                        return ref
+            # if thumb:
+            #     if ref.fromAddr == instruction.address - 1:
+            #         references.append(ref)
+            #         if ref.refType == "read":
+            #             return ref
+            #     else:
+            #         pass
+            # else:
+            if ref.fromAddr == instruction.address:
+                references.append(ref)
+                if ref.refType == "read":
+                    return ref
                 else:
                     pass
         if len(references) >= 1:
-            return references[0]
+            reference = max(references, key=lambda ref: ref.toAddr)
+            if reference.toAddr <= self.project_patch.entry:
+                return None
+            else:
+                return reference
+
 
     def  handle_references(self, reference, matched_refs, instruction_patch):
         """
@@ -278,7 +286,7 @@ class Patching:
         self.backend.apply_patches(patches)
 
         # Tracking the address that will be read from
-        register = TrackingRegister(register_name, self.writing_address + difference + 4)
+        register = TrackingRegister(register_name, self.writing_address + difference + 4, reference.toAddr)
 
         self.new_def_registers.append(register)
 
@@ -338,20 +346,20 @@ class Patching:
         for (register, data) in affected_registers:
             # Write the data to the ldr_data_address
             patches = [RawMemPatch(register.ldr_data_address, data)]
-            self.backend.apply(patches)
+            self.backend.apply_patches(patches)
 
 
-
-        # TODO: Implement this
-        self.replacing_add_with_sub(instruction_patch)
-
-        if self.is_thumb:
-            self.writing_address = self.writing_address + instruction_patch.size * 2
-            self.remember_shifted_bytes(2)
-
-        else:
-            self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
-            self.writing_address = self.writing_address + instruction_patch.size
+        #
+        # # TODO: Implement this (?! Probably not necessary)
+        # self.replacing_add_with_sub(instruction_patch)
+        #
+        # if self.is_thumb:
+        #     self.writing_address = self.writing_address + instruction_patch.size * 2
+        #     self.remember_shifted_bytes(2)
+        #
+        # else:
+        self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+        self.writing_address = self.writing_address + instruction_patch.size
 
 
 
@@ -434,7 +442,7 @@ class Patching:
 
     def reassemble_reference_at_different_address_thumb(self, instruction_patch, old_reference):
 
-        new_string = self.replace_jump_target_address(instruction_patch, old_reference.toAddr)
+        new_string = self.replace_jump_target_address(instruction_patch, old_reference.toAddr-1)
 
         new_string = new_string.replace("b ", "bl ")
 
@@ -452,7 +460,7 @@ class Patching:
             self.backend.apply_patches(patches)
             return
 
-        result = self.writing_address - old_reference.toAddr % 4
+        result = (self.writing_address - old_reference.toAddr) % 4
         if result == 0:
             self.remember_shifted_bytes(2)
 
@@ -490,7 +498,7 @@ class Patching:
 
         # Tracking register
 
-        register_pattern = re.compile(r'r\d+')
+        register_pattern = re.compile(r'(r\d+|sb|sl)')
 
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction_patch.op_str)
@@ -517,15 +525,20 @@ class Patching:
             # Else we need to add the actual data to the new memory as well...
             else:
                 # Get the data we need to add to the vulnerable program
-                data = self.load_data_from_memory(offset_reference.toAddr)
-                patches = [RawMemPatch(self.new_memory_writing_address, data)]
+                if offset_reference.toAddr <= self.project_patch.entry:
+                    data = offset_reference.toAddr.to_bytes(4, byteorder='little')
+                    patches = [RawMemPatch(data_address, data)]
+                    self.backend.apply_patches(patches)
+                else:
+                    data = self.load_data_from_memory(offset_reference.toAddr)
+                    patches = [RawMemPatch(self.new_memory_writing_address, data)]
                 # Write the address of the data as a data to be read
-                self.backend.apply_patches(patches)
-                data_to_be_read = self.new_memory_writing_address.to_bytes(4, byteorder='little')
+                    self.backend.apply_patches(patches)
+                    data_to_be_read = self.new_memory_writing_address.to_bytes(4, byteorder='little')
 
-                patches = [RawMemPatch(data_address, data_to_be_read)]
-                self.backend.apply_patches(patches)
-                self.new_memory_writing_address = self.new_memory_writing_address + len(data) + 4
+                    patches = [RawMemPatch(data_address, data_to_be_read)]
+                    self.backend.apply_patches(patches)
+                    self.new_memory_writing_address = self.new_memory_writing_address + len(data) + 4
 
 
         self.writing_address = self.writing_address + instruction_patch.size
@@ -546,7 +559,7 @@ class Patching:
         # self.new_memory_writing_address = self.new_memory_writing_address + instruction_patch.size
 
         # Save this load data address in the corresponding register
-        register = TrackingRegister(register_name, data_address)
+        register = TrackingRegister(register_name, data_address, reference.toAddr)
         
         # Add the register to the list of registers that need to be tracked
         self.new_def_registers.append(register)
@@ -607,13 +620,13 @@ class Patching:
         for (register, data) in affected_registers:
             # Write the data to the ldr_data_address
             patches = [RawMemPatch(register.ldr_data_address, data)]
-            self.backend.apply(patches)
+            self.backend.apply_patches(patches)
             data = self.load_data_from_memory(reference.toAddr)
 
             # Write the data to the new memory address
 
-            patches = [RawMemPatch(self.new_memory_writing_address, data)]
-            self.backend.apply(patches)
+            patches = [RawMemPatch(self.new_memory_data_address, data)]
+            self.backend.apply_patches(patches)
 
             self.new_memory_data_address = self.new_memory_data_address + len(data)
 
@@ -638,12 +651,30 @@ class Patching:
 
         for res in self.new_def_registers:
             for result, value in results:
-                offset = re.search(r'\d+', str(result)).group()
-                reg_offset = self.project_patch.arch.get_register_offset(res.register_name)
-                if reg_offset == offset:
-                    data = value.to_bytes(4, byteorder='little')
-                    affected_registers = (res, data)
-                    self.new_def_registers.remove(res)
+                # offset = re.search(r'\d+', str(result)).group()
+                pattern = re.compile(r"^(?!r|t)")
+
+                # Extract strings that match the pattern
+
+                offset= str(result)
+                if pattern.match(offset):
+                    pattern = re.compile(r"^(?!x)")
+                    if pattern.match(offset):
+                        offset = int(offset, 16)
+                    else:
+                        offset = int(offset)
+                    if res.old_ldr_data_address == offset:
+                        value = int(str(value))
+                        data = value.to_bytes(4, byteorder='little')
+                        affected_registers.append((res, data))
+                        self.new_def_registers.remove(res)
+                # offset = int(offset)
+                # reg_offset = self.project_patch.arch.get_register_offset(res.register_name)
+                # if reg_offset == offset:
+                #     value = int(str(value))
+                #     data = value.to_bytes(4, byteorder='little')
+                #     affected_registers.append((res, data))
+                #     self.new_def_registers.remove(res)
 
         return affected_registers
 
