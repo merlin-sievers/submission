@@ -15,6 +15,7 @@ class Config:
         self.functionName = None
         self.sql_path = None
         self.binary_path = None
+        self.patch_path = None
         try:
             # Read the configuration file
             config.read("config.properties")
@@ -24,6 +25,7 @@ class Config:
             print("Hallo", self.functionName)
             self.sql_path = config.get("DEFAULT", "SQL.path")
             self.binary_path = config.get("DEFAULT", "binary.path")
+            self.patch_path = config.get("DEFAULT", "patch.path")
         except configparser.Error as e:
             print("Error reading configuration:", e)
 

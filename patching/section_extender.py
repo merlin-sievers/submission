@@ -23,6 +23,9 @@ class SectionExtender:
 
         binary.extend(segment, self.additional_size)
 
+        # TODO: Add check that segment can be extended
+
+
 
         # TODO: Adapt to general case!
 
