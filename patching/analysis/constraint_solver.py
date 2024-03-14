@@ -14,13 +14,6 @@ class ConstraintSolver:
         self._vex_stmt_handlers = []
         self.__init_handlers()
 
-        self.irsb = None
-        self.stmt_idx = None
-        self.tmps = None
-
-    #    Helper
-        self.helper_variable = None
-        self.helper_register = None
 
 
     def __init_handlers(self):
