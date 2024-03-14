@@ -35,8 +35,8 @@ class Patching:
         self.backend = None
         self.writing_address = None
         # TODO: Add path to the binary as an argument for the configuration
-        # self.project_vuln = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs= False)
-        self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/vuln_test_3", auto_load_libs= False)
+        self.project_vuln = angr.Project(self.patching_config.binary_path, auto_load_libs= False)
+        # self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/vuln_test_3", auto_load_libs= False)
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
 
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
@@ -44,8 +44,8 @@ class Patching:
         self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size + 100
         self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
 
-        # self.project_patch = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs = False)
-        self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
+        self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs = False)
+        # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
 
         self.cfg_patch = self.project_patch.analyses.CFGFast()
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
@@ -81,8 +81,8 @@ class Patching:
 
         # Getting all References from both the vulnerable Program and the patch Program
         matched_refs = RefMatcher()
-        refs_vuln = matched_refs.get_refs(self.project_vuln)
-        self.refs_patch = matched_refs.get_refs(self.project_patch)
+        refs_vuln = matched_refs.get_refs(self.project_vuln, self.patching_config.functionName)
+        self.refs_patch = matched_refs.get_refs(self.project_patch, self.patching_config.functionName)
 
         # Match all References
         matched_refs.match_references_from_perfect_matched_blocks(perfect_matches, refs_vuln, self.refs_patch, self.project_vuln, self.project_patch)
