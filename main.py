@@ -18,13 +18,18 @@ from variable_backward_slicing import VariableBackwardSlicing
 
 
 # loading the patch binary to perform backward slicing
-# project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs= False)
+project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs= False)
 
-project = angr.Project("Testsuite/ReferenceTest/vuln_test_2.o", auto_load_libs= False)
+# project = angr.Project("Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
 
 # Getting the target function
-# target_function = project.loader.find_symbol("png_check_keyword")
-target_function = project.loader.find_symbol("_start")
+target_function = project.loader.find_symbol("png_check_keyword")
+
+
+# Building the CFGEmulated for the target function in order to be able to build the DDG
+cfg_fast = project.analyses.CFGFast()
+
+# target_function = project.loader.find_symbol("_start")
 
 target_block = project.factory.block(target_function.rebased_addr)
 
@@ -34,8 +39,7 @@ print(target_block.disassembly)
 target_block.vex.pp()
 print(target_block.arch)
 
-# Building the CFGEmulated for the target function in order to be able to build the DDG
-cfg_fast = project.analyses.CFGFast()
+target_block = project.factory.block(target_function.rebased_addr)
 cfg = project.analyses.CFGEmulated(keep_state=True,  state_add_options=angr.sim_options.refs, context_sensitivity_level=2, starts=[target_function.rebased_addr])
 #
 
@@ -52,9 +56,9 @@ cfg.normalize()
 # for node in vfg.graph.nodes:
 #     print("VSA", node, type(node))
 #
-plot_cfg(cfg, fname="test_vuln", asminst=True, remove_imports=True, remove_path_terminator=True)
+# plot_cfg(cfg_fast, fname="test_vuln", asminst=True, remove_imports=True, remove_path_terminator=True)
 
-print(cfg.graph.size())
+# print(cfg.graph.size())
 
 
 
@@ -189,7 +193,7 @@ for stat, ids in bs.chosen_statements.items():
         print(id)
 
 constraints = ConstraintSolver(project)
-results = constraints.solve(bs.chosen_statements, 0x400000, 0x2049fb)
+results = constraints.solve(bs.chosen_statements, 0x400000, 0x404a25)
 for result , _  in results:
     testst = str(result)
     number = re.search(r'\d+', testst).group()
