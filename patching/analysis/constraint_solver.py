@@ -14,6 +14,7 @@ class ConstraintSolver:
         self._vex_stmt_handlers = []
         self.__init_handlers()
 
+        self.subtraction = False
 
 
     def __init_handlers(self):
@@ -28,21 +29,30 @@ class ConstraintSolver:
         assert None not in self._vex_expr_handlers
         assert None not in self._vex_stmt_handlers
 
-    def solve(self, slice, jump_target, writing_address):
+    def solve(self, slice, jump_target, writing_address, subtraction = False, subtraction_address=None):
         """
         Running the SMTSolver with the Slice of a Control Flow graph and the jump target
         :param slice: The slice of the Control Flow Graph
         :param jump_target: The jump target of the Control Flow Graph
+        :param writing_address: The address where the jump instruction is written to
+        :param subtraction: If the jump target is a subtraction
+        :param subtraction_address: The address of the subtraction
         """
         results = []
         # Iterating over the instruction addresses in the slice
         for address, ids in slice.items():
             block = self.project.factory.block(address)
-            if block.thumb:
-                address = address - 1
+            # if block.thumb:
+            #     address = address - 1
             # Now iterate over the vex statements of the instruction
             for id, ins_addr in ids:
+
+
                 statement = block.vex.statements[id]
+                if subtraction:
+                    if ins_addr == subtraction_address:
+                        self.subtraction = True
+
                 if self.handle_vex_statement(statement, ins_addr, writing_address):
                     continue
                 else:
@@ -103,7 +113,7 @@ class ConstraintSolver:
     def _handle_vex_stmt_AbiHint(self, statement, address, writing_address):
         pass
 
-    def _handle_vex_stmt_WrTmp(self, statement, address, writing_address):
+    def _handle_vex_stmt_WrTmp(self, statement, address, writing_address, ):
         tmp = z3.BitVec("t" + str(statement.tmp), 32)
         self.variables.append(tmp)
         expression = self._handle_vex_expr(statement.data, address, writing_address)
@@ -171,6 +181,7 @@ class ConstraintSolver:
 
     def _handle_vex_expr_RdTmp(self, expression, address, writing_address):
         variable = z3.BitVec("t" + str(expression.tmp), 32)
+        self.variables.append(variable)
         return variable
     def _handle_vex_expr_Qop(self, expression, address, writing_address):
         pass
@@ -178,11 +189,17 @@ class ConstraintSolver:
     def _handle_vex_expr_Triop(self, expression, address, writing_address):
         pass
 
-    def _handle_vex_expr_Binop(self, expression, address, writing_address):
+    def _handle_vex_expr_Binop(self, expression, address, writing_address, subtraction = False):
         op1 = self._handle_vex_expr(expression.args[0], address, writing_address)
+        self.variables.append(op1)
         op2 = self._handle_vex_expr(expression.args[1], address, writing_address)
+        self.variables.append(op2)
         if expression.op == "Iop_Add32":
-            expr = op1 + op2
+            if self.subtraction:
+                expr = op2 - op1
+                self.subtraction = False
+            else:
+                expr = op1 + op2
             return expr
         if expression.op == "Iop_CmpNE32":
             expr = op1 - op2
@@ -221,7 +238,9 @@ class ConstraintSolver:
     def _handle_vex_expr_ITE(self, expression, address, writing_address):
         cond = self._handle_vex_expr(expression.cond, address, writing_address)
         true = self._handle_vex_expr(expression.iftrue, address, writing_address)
+        self.variables.append(true)
         false = self._handle_vex_expr(expression.iffalse, address, writing_address)
+        self.variables.append(false)
         condition = z3.If(cond != 0, true, false)
         return condition
 

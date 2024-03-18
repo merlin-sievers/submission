@@ -18,20 +18,27 @@ class SectionExtender:
         for section in segment.sections:
             s = section
 
+        if binary.segments[1].virtual_address - binary.segments[0].virtual_address < self.additional_size:
+            print("Load segment and data segment are too close to each other. Cannot extend.")
+            return
         # Extend the section
         s.size += self.additional_size
 
         binary.extend(segment, self.additional_size)
 
         # TODO: Add check that segment can be extended
-
+        if binary.segments[1].virtual_address - binary.segments[0].virtual_address < self.additional_size:
+            print("Load segment and data segment are too close to each other. Cannot extend.")
+            return
 
 
         # TODO: Adapt to general case!
+        seg = binary.segments[1]
+
 
         binary.segments[1].virtual_address = binary.segments[1].virtual_address - self.additional_size
+        binary.segments[2].virtual_address = binary.segments[2].virtual_address - self.additional_size
 
-        binary.segments[1].sections[0].virtual_address = binary.segments[1].virtual_address - self.additional_size
 
 
         output_file = self.elf_file +"_modified"

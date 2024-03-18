@@ -3,6 +3,7 @@ import re
 import logging
 import claripy
 import networkx
+from patcherex.backends.detourbackend import DetourBackend
 from angr import AngrBackwardSlicingError, Analysis
 from angr.analyses import BackwardSlice, CFGEmulated
 from angr.code_location import CodeLocation
@@ -10,6 +11,7 @@ from angr.sim_variable import SimRegisterVariable
 
 from angrutils import plot_cfg
 from patching.analysis.constraint_solver import ConstraintSolver
+from patching.section_extender import SectionExtender
 from variable_backward_slicing import VariableBackwardSlicing
 
 # Uncommented to enable logging
@@ -25,6 +27,9 @@ project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto
 # Getting the target function
 target_function = project.loader.find_symbol("png_check_keyword")
 
+file_to_be_patched = SectionExtender("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", 1024).extend_last_section_of_segment()
+
+backend = DetourBackend(file_to_be_patched)
 
 # Building the CFGEmulated for the target function in order to be able to build the DDG
 cfg_fast = project.analyses.CFGFast()
@@ -193,7 +198,7 @@ for stat, ids in bs.chosen_statements.items():
         print(id)
 
 constraints = ConstraintSolver(project)
-results = constraints.solve(bs.chosen_statements, 0x400000, 0x404a25)
+results = constraints.solve(bs.chosen_statements, 0x400000, 0x404a25, True, 0x404a25)
 for result , _  in results:
     testst = str(result)
     number = re.search(r'\d+', testst).group()
