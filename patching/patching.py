@@ -13,7 +13,7 @@ from patching.matcher import Matcher
 from patching.matcher import RefMatcher
 from patcherex.backends.detourbackend import DetourBackend
 
-from patching.reference import TrackingRegister
+from patching.reference import TrackingRegister, Reference
 from patching.section_extender import SectionExtender
 from patching.shifts import Shift
 
@@ -63,6 +63,7 @@ class Patching:
 
         self.shifts_ascending = []
         self.shifts_descending = []
+        self.shift_references = []
 
     def patch(self, binary_fname):
         """
@@ -156,12 +157,19 @@ class Patching:
             self.shifts_descending[-1].end = self.writing_address
 
         # Fix all References broken by shifts
-        # self.fix_shifts_in_references()
+
+
+
         # self.backend.save("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0_detoured")
         self.backend.save("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test_detoured")
+
+        # Reopen the patched binary to fix the shifts
+        shift_backend = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test_detoured", auto_load_libs=False)
+
+
         # Jump back to the original function since the patch is now integrated
-
-
+        self.fix_shifts_in_references(new_memory_address, shift_backend)
+    
     #     if (!(next.subtract(codeBlockEnde.getMaxAddress().next()) % 4 == 0)):
     #                 byte[] test = new byte[2]
     #                 test[0] = (byte) 0x00
@@ -233,7 +241,6 @@ class Patching:
         # First check if from Address of Reference is perfectly matched
         if reference.fromAddr in matched_refs.match_from_new_address:
             self.handle_matched_reference(reference, matched_refs.match_from_new_address[reference.fromAddr], instruction_patch, matched_refs)
-
         # Check if the To Address of the Reference is perfectly matched
         elif reference.toAddr in matched_refs.match_to_new_address:
             self.handle_matched_reference(reference, matched_refs.match_to_new_address[reference.toAddr], instruction_patch, matched_refs)
@@ -351,7 +358,7 @@ class Patching:
         pass
 
 
-    def handle_control_flow_jump_reference(self, instruction_patch, old_reference):
+    def handle_control_flow_jump_reference(self, instruction_patch, reference, old_reference):
         # Check if Reference jumps outside of the patch
         if self._reference_outside_of_patch(self.code_block_start, self.code_block_end, old_reference):
     
@@ -369,9 +376,16 @@ class Patching:
                 self.reassemble_reference_at_different_address(instruction_patch, old_reference.toAddr, self.writing_address)
                 self.writing_address = self.writing_address + instruction_patch.size
 
+            shift_reference = Reference(self.writing_address, old_reference.toAddr, "control_flow_jump")
+            self.shift_references.append(shift_reference)
+
         # Reference inside of patch
         else:
             self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+            shift_reference = Reference(self.writing_address,
+                                        self.writing_address + reference.toAddr - reference.fromAddr,
+                                        "control_flow_jump")
+            self.shift_references.append(shift_reference)
             self.writing_address = self.writing_address + instruction_patch.size
 
 
@@ -381,6 +395,10 @@ class Patching:
             self.rewriting_and_adding_reference_to_the_old_program(reference, instruction_patch, matched_refs)
         else:
             self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+            shift_reference = Reference(self.writing_address,
+                                        self.writing_address + reference.toAddr - reference.fromAddr,
+                                        reference.refType)
+            self.shift_references.append(shift_reference)
             self.writing_address = self.writing_address + instruction_patch.size
 
     def handle_matched_reference(self, reference, old_reference, instruction_patch, matched_refs):
@@ -401,7 +419,7 @@ class Patching:
 
         # Then CONTROL_FLOW_JUMP reference
         elif ref_type == "control_flow_jump":
-            self.handle_control_flow_jump_reference(instruction_patch, old_reference)
+            self.handle_control_flow_jump_reference(instruction_patch, reference, old_reference)
 
     def remember_shifted_bytes(self, number_shifted_bytes):
 
@@ -478,6 +496,10 @@ class Patching:
             self.add_offset_reference(reference, instruction_patch)
         elif reference.refType == "control_flow_jump":
             self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+            shift_reference = Reference(self.writing_address, self.writing_address + reference.toAddr - reference.fromAddr, "control_flow_jump")
+            self.shift_references.append(shift_reference)
+            self.writing_address = self.writing_address + instruction_patch.size
+
 
 
     def add_read_reference(self, instruction_patch, reference, matched_refs):
@@ -492,12 +514,27 @@ class Patching:
         # Extract the first match (assuming there is at least one match)
         register_name = matches[0]
 
-        # Copy the bytes to the vuln program
-        self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+
+        # Replacing the reference with the new target address
+        difference = reference.toAddr - reference.fromAddr
+        difference = difference + 28
+        new_instruction_string = self.replace_jump_target_address(instruction_patch, difference)
+
+        patches = [InlinePatch(self.writing_address, new_instruction_string, is_thumb=self.is_thumb)]
+        self.backend.apply_patches(patches)
+
+
 
         # Calculate data address (relative to pc)
-        data_address = self.writing_address + (reference.toAddr - reference.fromAddr)
-        # TODO: Might need to move the data address due to shifts... (not implemented yet)
+        if self.is_thumb:
+            pc = 4
+        else:
+            pc = 8
+        data_address = self.writing_address + difference + pc
+
+        shift_reference = Reference(self.writing_address, data_address, "read")
+        self.shift_references.append(shift_reference)
+
         # Check if there is an offset reference as well from this instruction
         offset_reference = self.get_offset_reference_from_instruction(instruction_patch)
         # Check if the offset reference is perfectly matched
@@ -670,29 +707,33 @@ class Patching:
                 else:
                     pass
 
-    def fix_shifts_in_references(self, patch_start_address_of_patch):
-        pass
-    #     patch_end = self.shifts_ascending[len(self.shifts_ascending)-1].end
-    #
-    #     self.project_patch.factory.block(patch_start_address_of_patch)
-    #     codunHelp = vulnerableProgram.getListing().getCodeUnitAt(patchStart)
-    #     for  vulnerableProgram.getListing().getCodeUnits(patchStart, true):
-    #
-    #
-    #
-    #     refsToBeFixed = codunHelp.getReferencesFrom();
-    #
-    #     if refsToBeFixed.length > 0:
-    #         Address jumpTarget =  refsToBeFixed[0].getToAddress()
-    #         if isInShiftListZone(jumpTarget, "asc") != 0:
-    #             startAddr =refsToBeFixed[0].getFromAddress();
-    #             refT = startAddr;
-    #             while (!jumpTarget.equals(refT)) {
-    #                 refT = jumpTarget
-    #                 if (refsToBeFixed[0].getFromAddress().compareTo(refsToBeFixed[0].getToAddress()) == -1):
-    #                     jumpTarget = addingShiftToAddress(startAddr, jumpTarget)
-    #                 else:
-    #                     jumpTarget = subtractingShiftFromAddress(startAddr, jumpTarget)
+    def fix_shifts_in_references(self, patch_start_address_of_patch, shift_backend):
+
+        patch_end = self.shifts_ascending[-1].end
+
+        # while patch_start_address_of_patch <= patch_end:
+        #
+        #     xrefs = self.backend.project.analyses.XRefs(block=self.backend.project.factory.block(patch_start_address_of_patch))
+
+        xrefs = self.shift_references
+        for ref in xrefs:
+            jump_target = ref.toAddr
+            if self.isInShiftListZone(jump_target, "asc"):
+                instruction = shift_backend.factory.block(ref.fromAddr+1).disassembly.insns[0]
+                start_addr = ref.fromAddr
+                refT = start_addr
+                while refT != jump_target:
+                    refT = jump_target
+                    if ref.fromAddr < ref.toAddr:
+                        jump_target = self.adding_shift_to_address(start_addr, ref.toAddr)
+                    else:
+                        jump_target = self.subtracting_shift_from_address(start_addr, ref.toAddr)
+
+                    start_addr = refT
+            new_string = self.replace_jump_target_address(instruction, jump_target)
+            print(new_string)
+
+        # patch_start_address_of_patch = patch_start_address_of_patch + instruction.size
     #
     #     startAddr = refT;
     #     asm = Assemblers.getAssembler(vulnerableProgram)
@@ -700,6 +741,60 @@ class Patching:
     # newString = replaceJumpAddr(codunHelp, jumpTarget)
     #
     # asm.assemble(refsToBeFixed[0].getFromAddress(), newString)
+
+    def isInShiftListZone(self, ref, order):
+
+#     print("\n\t IsInShiftList " + "%s %s", shifts.get(shifts.size() - 1).start, shifts.get(shifts.size() - 1).end);
+        if order == "asc":
+            for i in range(len(self.shifts_ascending)):
+                # printf("\n\t Shifted at %s", shifts.get(i).start)
+                # printf("\n\t Shifted at %s", shifts.get(i).end)
+                if self.shifts_ascending[i].isInsideShiftZone(ref):
+                    print("\n\t Counter", i)
+                    return i
+            if self.shifts_ascending[-1].end <= ref:
+                return len(self.shifts_ascending)
+            return -1
+        else:
+            for i in range(len(self.shifts_descending)):
+                # printf("\n\t Shifted at %s", shifts.get(i).start);
+                # printf("\n\t Shifted at %s", shifts.get(i).end);
+                if self.shifts_descending[i].isInsideShiftZone(ref):
+                    print("\n\t Counter desc", i)
+                    return i
+
+            if self.shifts_descending[-1].end <= ref:
+                return len(self.shifts_descending)
+
+            return -1
+
+
+    def subtracting_shift_from_address(self, ref_start, ref_end):
+        start = self.isInShiftListZone(ref_start, "desc")
+        shift_bytes = 0
+        jump_target = ref_end
+        if start >= len(self.shifts_descending):
+            start = len(self.shifts_descending)-1
+        for i in range(start, 0, -1):
+            shift_bytes = shift_bytes + self.shifts_descending[i].smallerThanShiftZone(ref_end)
+            if self.shifts_descending[i].isInsideShiftZone(ref_end):
+                jump_target = ref_end - shift_bytes
+                return jump_target
+        return jump_target
+
+    def adding_shift_to_address(self, ref_start, ref_end):
+        start = self.isInShiftListZone(ref_start, "asc")
+        shift_bytes = 0
+        jump_target = ref_end
+        if start >= len(self.shifts_ascending):
+            start = len(self.shifts_ascending)-1
+        for i in range(start+1, len(self.shifts_ascending), 1):
+            shift_bytes = shift_bytes + self.shifts_ascending[i].biggerThanShiftZone(ref_end)
+            if self.shifts_ascending[i].isInsideShiftZone(ref_end):
+                jump_target = ref_end + shift_bytes
+                return jump_target
+        return jump_target
+
 
 
 
