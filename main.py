@@ -10,6 +10,7 @@ from angr.code_location import CodeLocation
 from angr.sim_variable import SimRegisterVariable
 
 from angrutils import plot_cfg
+from patcherex.patches import InlinePatch, AddLabelPatch
 from patching.analysis.constraint_solver import ConstraintSolver
 from patching.section_extender import SectionExtender
 from variable_backward_slicing import VariableBackwardSlicing
@@ -19,24 +20,40 @@ from variable_backward_slicing import VariableBackwardSlicing
 # logging.getLogger('angr.analyses').setLevel('DEBUG')
 
 
-# loading the patch binary to perform backward slicing
-project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs= False)
 
-# project = angr.Project("Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
+
+# loading the patch binary to perform backward slicing
+# project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs= False)
+
+project = angr.Project("Testsuite/vuln_test_detoured", auto_load_libs= False)
 
 # Getting the target function
-target_function = project.loader.find_symbol("png_check_keyword")
+# target_function = project.loader.find_symbol("png_check_keyword")
 
-file_to_be_patched = SectionExtender("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", 1024).extend_last_section_of_segment()
+# file_to_be_patched = SectionExtender("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", 1024).extend_last_section_of_segment()
 
-backend = DetourBackend(file_to_be_patched)
+backend = DetourBackend("Testsuite/vuln_test_detoured")
+patches = []
+patch = AddLabelPatch(0x4049f4, "test")
+patches.append(patch)
+code = backend.compile_asm("bne $+0x1e", base=0x5af0, is_thumb=True)
+patch = InlinePatch(0x40f9f0, "b _png_check_keyword", is_thumb=True)
+# patch = InlinePatch(0x415a36, "beq #0x166", is_thumb=True)
+patches.append(patch)
+backend.apply_patches(patches)
+
+# patches = [InlinePatch(target_function.rebased_addr, "b 0x4049f1", is_thumb=True)]
+# backend.apply_patches(patches)
+
+# backend.save("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0_TEST")
+# test_project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0_TEST", auto_load_libs=False)
 
 # Building the CFGEmulated for the target function in order to be able to build the DDG
 cfg_fast = project.analyses.CFGFast()
 
 # target_function = project.loader.find_symbol("_start")
 
-target_block = project.factory.block(target_function.rebased_addr)
+target_block = project.factory.block(0x415a35)
 
 print(target_block.disassembly)
 # Getting the target block to be able to manually verify the backward slicing

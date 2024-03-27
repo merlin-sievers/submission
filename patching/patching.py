@@ -434,11 +434,7 @@ class Patching:
         outside_shift_descending = Shift()
         outside_shift_ascending.start = self.writing_address
 
-        if number_shifted_bytes == 4:
-            patches = RawMemPatch(self.writing_address, b"\x00\xbf")
-            self.patches.append(patches)
-            # self.backend.apply_patches(patches)
-            self.writing_address = self.writing_address + 2
+
 
         outside_shift_descending.start = self.writing_address
         outside_shift_ascending.shifted_bytes = number_shifted_bytes
@@ -457,7 +453,7 @@ class Patching:
 
         new_string = new_string.replace("b ", "bl ")
 
-        if instruction_patch.mnemonic not in {"bl", "blx", "b", "bx"}:
+        if instruction_patch.mnemonic not in {"bl", "blx", "b", "bx", "cbz", "cbnz"}:
 
             if instruction_patch.size == 2:
                 offset = 4
@@ -490,19 +486,27 @@ class Patching:
 
             # self.backend.apply_patches(patches)
             return
-
-        result = (self.writing_address - old_reference.toAddr) % 4
-        if result == 0:
-            self.remember_shifted_bytes(2)
-
-            patches = RawMemPatch(self.writing_address, b"\x00\xbf")
-            self.patches.append(patches)
-            # self.backend.apply_patches(patches)
-            self.writing_address = self.writing_address + 2
+        #
+        # result = (self.writing_address - old_reference.toAddr) % 4
+        # if result == 0:
+        #     self.remember_shifted_bytes(2)
+        #
+        #     patches = RawMemPatch(self.writing_address, b"\x00\xbf")
+        #     self.patches.append(patches)
+        #     # self.backend.apply_patches(patches)
+        #     self.writing_address = self.writing_address + 2
 
         self.patches.append(patches)
-        self.writing_address = self.writing_address + (instruction_patch.size * 2)
         self.remember_shifted_bytes(4)
+        self.writing_address = self.writing_address + (instruction_patch.size * 2)
+        patches = RawMemPatch(self.writing_address, b"\x00\xbf")
+        self.patches.append(patches)
+            # self.backend.apply_patches(patches)
+        self.writing_address = self.writing_address + 2
+
+
+
+
         # self.backend.apply_patches(patches)
 
     def reassemble_reference_at_different_address(self, instruction_patch, target_address, writing_address):
@@ -548,9 +552,11 @@ class Patching:
             thumb = 1
         else:
             thumb = 0
-        # Replacing the reference with the new target address
+        # Replacing the reference with the new target address Difference includes 2 bytes for the pc, so if we add difference to the pc the new target address is 2 bytes away.
         difference = reference.toAddr - reference.fromAddr
-        difference = difference + 28 - thumb
+        difference = difference + 26 - thumb
+        if difference % 4 != 0:
+            difference = difference + 2
         new_instruction_string = self.replace_jump_target_address(instruction_patch, difference)
 
         patches = InlinePatch(self.writing_address, new_instruction_string, is_thumb=self.is_thumb)
@@ -560,11 +566,17 @@ class Patching:
 
 
         # Calculate data address (relative to pc)
-        if self.is_thumb:
-            pc = 2
-        else:
-            pc = 4
-        data_address = self.writing_address + difference + pc
+        # if instruction_patch.size == 2:
+        #     if (self.writing_address + difference) % 4 != 0:
+        #         pc = 2
+        #     else:
+        #         pc = 4
+        # else:
+        #     pc = 0
+
+        pc = 2
+        alignment = (self.writing_address + difference + pc) % 4
+        data_address = self.writing_address + difference + pc + alignment
 
         shift_reference = Reference(self.writing_address, data_address, "read")
         self.shift_references.append(shift_reference)
@@ -660,7 +672,7 @@ class Patching:
         if self.new_memory_data_address is None:
            self.new_memory_data_address = self.new_memory_writing_address + 100
 
-        results = solver.solve(backward_slice.chosen_statements, self.new_memory_data_address, self.writing_address)
+        results = solver.solve(backward_slice.chosen_statements, self.new_memory_writing_address, self.writing_address)
 
         if results is None:
             return
@@ -682,8 +694,8 @@ class Patching:
             patches = RawMemPatch(self.new_memory_writing_address, data)
             self.patches.append(patches)
             # self.backend.apply_patches(patches)
-
-            self.new_memory_writing_address = self.new_memory_writing_address + len(data) + 4
+            alignment = (self.new_memory_writing_address + len(data) + 4 ) % 4
+            self.new_memory_writing_address = self.new_memory_writing_address + len(data) + 4 + alignment
 
         self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
         self.writing_address = self.writing_address + instruction_patch.size
@@ -719,7 +731,10 @@ class Patching:
                     else:
                         offset = int(offset)
                     if res.old_ldr_data_address == offset:
+
                         value = int(str(value))
+                        if self.is_thumb:
+                            value = value
                         data = value.to_bytes(4, byteorder='little')
                         affected_registers.append((res, data))
                         self.new_def_registers.remove(res)
@@ -775,18 +790,21 @@ class Patching:
                         target_address = jump_target - ref.fromAddr - 4
                         new_string = self.replace_jump_target_address(instruction, target_address)
                         patch = InlinePatch(ref.fromAddr, new_string, is_thumb=self.is_thumb)
-                    elif instruction.mnemonic not in {"bl", "blx", "b", "bx"}:
+                    elif instruction.mnemonic not in {"bl", "blx", "b", "bx", "cbz", "cbnz"}:
                         # TODO: Decrease the size of the instruction address so that the keystone assembler works... (maybe)
                         if instruction.size == 2:
-                            offset = 4
+                            offset = 0
+                            base = 0
                         else:
                             offset = 4
+                            base = ref.fromAddr - self.project_patch.loader.min_addr
                         target_address = jump_target - ref.fromAddr - offset
                         if target_address > 0 :
                             new_string = instruction.mnemonic + " $+" + str(hex(target_address))
                         else:
                             new_string = instruction.mnemonic + " $" + str(hex(target_address))
-                        patch = InlinePatch(ref.fromAddr, new_string, is_thumb=self.is_thumb)
+                        code = self.backend.compile_asm(new_string, base=base, is_thumb=self.is_thumb)
+                        patch = RawMemPatch(ref.fromAddr, code)
                     else:
                         new_string = self.replace_jump_target_address(instruction, jump_target)
                         patch = InlinePatch(ref.fromAddr, new_string, is_thumb=self.is_thumb)

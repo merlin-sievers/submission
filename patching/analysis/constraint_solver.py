@@ -47,6 +47,8 @@ class ConstraintSolver:
             # Now iterate over the vex statements of the instruction
             for id, ins_addr in ids:
 
+                if block.thumb:
+                    ins_addr = ins_addr - 1
 
                 statement = block.vex.statements[id]
                 if subtraction:
