@@ -1,14 +1,20 @@
 import pyvex.stmt
 import z3
 
-# TODO: Make sure that SSA transformation is not necessary
+
+# Assumptions Vex is only in SSA Form inside of a basic block.
 class ConstraintSolver:
-    def __init__(self, project):
+    def __init__(self, project, start_address):
         self.project = project
         self.ctx = z3.Context()
         self.solver = z3.Solver()
         self.variables = []
         self.results = []
+
+        self.basic_block_ssa = "b"
+        self.register_ssa = dict()
+        self.used_registers = []
+        self.start_address = start_address
 
         self._vex_expr_handlers = []
         self._vex_stmt_handlers = []
@@ -29,7 +35,7 @@ class ConstraintSolver:
         assert None not in self._vex_expr_handlers
         assert None not in self._vex_stmt_handlers
 
-    def solve(self, slice, jump_target, writing_address, subtraction = False, subtraction_address=None):
+    def solve(self, slice, jump_target, writing_address, variable, subtraction = False, subtraction_address=None):
         """
         Running the SMTSolver with the Slice of a Control Flow graph and the jump target
         :param slice: The slice of the Control Flow Graph
@@ -39,13 +45,16 @@ class ConstraintSolver:
         :param subtraction_address: The address of the subtraction
         """
         results = []
+        i = 0
+        self.basic_block_ssa = "b"
+        self.variable = variable
         # Iterating over the instruction addresses in the slice
-        for address, ids in slice.items():
+        for address, ids in sorted(slice.items()):
             block = self.project.factory.block(address)
-            # if block.thumb:
-            #     address = address - 1
+            self.basic_block_ssa = str(i) + "b"
+            i = i+1
             # Now iterate over the vex statements of the instruction
-            for id, ins_addr in ids:
+            for id, ins_addr in sorted(ids):
 
                 if block.thumb:
                     ins_addr = ins_addr - 1
@@ -56,6 +65,8 @@ class ConstraintSolver:
                         self.subtraction = True
 
                 if self.handle_vex_statement(statement, ins_addr, writing_address):
+                    # To debug solver we need to push the assertions
+                    # self.solver.push()
                     continue
                 else:
                     break
@@ -63,10 +74,16 @@ class ConstraintSolver:
         # Solve equation system so that it jumps to the target
 
         new_target = z3.BitVecVal(jump_target, 32)
-        print(self.variables[len(self.variables)-1])
+
         if self.variables == []:
             return None
-        self.solver.add(self.variables[len(self.variables)-1] == new_target)
+
+        register = z3.BitVec("r" + str(variable.reg), 32)
+        if len(self.used_registers) == 0:
+            self.used_registers.append(register)
+
+
+        self.solver.add(self.used_registers[0] == new_target)
 
         if self.solver.check() == z3.sat:
         # Get the model
@@ -75,13 +92,13 @@ class ConstraintSolver:
         # Get the values of variables
         #     for itReg in inputs:
         #         relevantRegister = itReg
-            for equation in self.solver.assertions():
-                print("\n\t", equation)
+        #     for equation in self.solver.assertions():
+                # print("\n\t", equation)
 
             for decl in model.decls():
 
                 variable = model.eval(decl(), True)
-
+                # print("var\n\t", decl, variable)
                 result = (decl, variable)
                 results.append(result)
 
@@ -116,7 +133,7 @@ class ConstraintSolver:
         pass
 
     def _handle_vex_stmt_WrTmp(self, statement, address, writing_address, ):
-        tmp = z3.BitVec("t" + str(statement.tmp), 32)
+        tmp = z3.BitVec("t" + self.basic_block_ssa + str(statement.tmp), 32)
         self.variables.append(tmp)
         expression = self._handle_vex_expr(statement.data, address, writing_address)
         if expression != None:
@@ -125,6 +142,17 @@ class ConstraintSolver:
 
     def _handle_vex_stmt_Put(self, statement, address, writing_address):
         register = z3.BitVec("r" + str(statement.offset), 32)
+        if register in self.register_ssa:
+            register_new = z3.BitVec("r" + self.basic_block_ssa + str(statement.offset), 32)
+            self.register_ssa[register].append(register_new)
+            register = register_new
+        else:
+            self.register_ssa[register] = [register]
+
+        if address == self.start_address:
+            if statement.offset == self.variable.reg:
+                self.used_registers.append(register)
+
         self.variables.append(register)
         expression = self._handle_vex_expr(statement.data, address, writing_address)
         self.solver.add(register == expression)
@@ -141,7 +169,7 @@ class ConstraintSolver:
         load = z3.BitVec(str(statement.addr), 32)
         alt = self._handle_vex_expr(statement.alt, address, writing_address)
         guard = self._handle_vex_expr(statement.guard, address, writing_address)
-        tmp = z3.BitVec("t" + str(statement.dst), 32)
+        tmp = z3.BitVec("t" + self.basic_block_ssa + str(statement.dst), 32)
         condition = z3.If(guard != 0, load, alt)
         self.solver.add(tmp == condition)
         return True
@@ -175,6 +203,8 @@ class ConstraintSolver:
 
     def _handle_vex_expr_Get(self, expression, address, writing_address):
         register = z3.BitVec("r" + str(expression.offset), 32)
+        if register in self.register_ssa:
+            register = self.register_ssa[register][-1]
         self.variables.append(register)
         return register
 
@@ -182,7 +212,7 @@ class ConstraintSolver:
         pass
 
     def _handle_vex_expr_RdTmp(self, expression, address, writing_address):
-        variable = z3.BitVec("t" + str(expression.tmp), 32)
+        variable = z3.BitVec("t" + self.basic_block_ssa + str(expression.tmp), 32)
         self.variables.append(variable)
         return variable
     def _handle_vex_expr_Qop(self, expression, address, writing_address):
@@ -247,7 +277,8 @@ class ConstraintSolver:
         return condition
 
     def _handle_vex_expr_CCall(self, expression, address, writing_address):
-        pass
+        expression = z3.BitVecVal(1, 32)
+        return expression
 
     def _handle_vex_expr_VECRET(self, expression, address, writing_address):
         pass

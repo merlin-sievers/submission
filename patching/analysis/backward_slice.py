@@ -121,11 +121,11 @@ class VariableBackwardSlicing(BackwardSlice):
         vars_to_add = set()
         print("Here we go" , cl)
         for vars in variables:
-            print("Variable", type(vars))
+            # print("Variable", type(vars))
 
             if self._ddg is not None and cl in self._ddg:
                 # definitions = self._ddg.view[cl.ins_addr].definitions
-                print("in DDG")
+                # print("in DDG")
                 definitions = self._ddg.find_definitions(vars, cl, simplified_graph=False)
                 for definition in definitions:
                     print(definition)

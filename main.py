@@ -8,6 +8,7 @@ from angr import AngrBackwardSlicingError, Analysis
 from angr.analyses import BackwardSlice, CFGEmulated
 from angr.code_location import CodeLocation
 from angr.sim_variable import SimRegisterVariable
+from z3 import z3
 
 from angrutils import plot_cfg
 from patcherex.patches import InlinePatch, AddLabelPatch
@@ -23,37 +24,36 @@ from variable_backward_slicing import VariableBackwardSlicing
 
 
 # loading the patch binary to perform backward slicing
-# project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs= False)
+project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs= False)
 
-project = angr.Project("Testsuite/vuln_test_detoured", auto_load_libs= False)
+# project = angr.Project("Testsuite/vuln_test_detoured", auto_load_libs= False)
 
 # Getting the target function
-# target_function = project.loader.find_symbol("png_check_keyword")
+target_function = project.loader.find_symbol("png_check_keyword")
 
 # file_to_be_patched = SectionExtender("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", 1024).extend_last_section_of_segment()
 
-backend = DetourBackend("Testsuite/vuln_test_detoured")
-patches = []
-patch = AddLabelPatch(0x4049f4, "test")
-patches.append(patch)
-code = backend.compile_asm("bne $+0x1e", base=0x5af0, is_thumb=True)
-patch = InlinePatch(0x40f9f0, "b _png_check_keyword", is_thumb=True)
-# patch = InlinePatch(0x415a36, "beq #0x166", is_thumb=True)
-patches.append(patch)
-backend.apply_patches(patches)
+# backend = DetourBackend("Testsuite/vuln_test_detoured")
+# patches = []
+# patch = AddLabelPatch(0x4049f4, "test")
+# patches.append(patch)
+# code = backend.compile_asm("bne $+0x1e", base=0x5af0, is_thumb=True)
+# patch = InlinePatch(0x40f9f0, "b _png_check_keyword", is_thumb=True)
+# # patch = InlinePatch(0x415a36, "beq #0x166", is_thumb=True)
+# patches.append(patch)
+# backend.apply_patches(patches)
 
 # patches = [InlinePatch(target_function.rebased_addr, "b 0x4049f1", is_thumb=True)]
 # backend.apply_patches(patches)
 
 # backend.save("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0_TEST")
 # test_project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0_TEST", auto_load_libs=False)
-
+cfg = project.analyses.CFGFast()
 # Building the CFGEmulated for the target function in order to be able to build the DDG
-cfg_fast = project.analyses.CFGFast()
+cfg = project.analyses.CFGEmulated(keep_state=True,  state_add_options=angr.sim_options.refs, context_sensitivity_level=2, starts=[target_function.rebased_addr])
 
-# target_function = project.loader.find_symbol("_start")
 
-target_block = project.factory.block(0x415a35)
+target_block = project.factory.block(0x404b27)
 
 print(target_block.disassembly)
 # Getting the target block to be able to manually verify the backward slicing
@@ -62,7 +62,6 @@ target_block.vex.pp()
 print(target_block.arch)
 
 target_block = project.factory.block(target_function.rebased_addr)
-cfg = project.analyses.CFGEmulated(keep_state=True,  state_add_options=angr.sim_options.refs, context_sensitivity_level=2, starts=[target_function.rebased_addr])
 #
 
 
@@ -93,13 +92,13 @@ ddg = project.analyses.DDG(cfg, start=target_function.rebased_addr)
 #     if node.location.ins_addr == 0x4049fb:
 #         print("found", node.variable, node.location)
 
-block = project.factory.block(addr=0x404a1b)
+block = project.factory.block(addr=0x404b27)
 print("block disassembly", block.disassembly)
 block.vex.pp()
-instruction = block.disassembly.insns[4]
-reg = instruction.operands[0].reg
-instruction1 = block.disassembly.insns[2]
-reg1 = instruction1.operands[0].reg
+instruction = block.disassembly.insns[2]
+# reg = instruction.operands[0].reg
+# instruction1 = block.disassembly.insns[2]
+# reg1 = instruction1.operands[0].reg
 
 register_pattern = re.compile(r'(r\d+|sb|sl)')
 # Find all matches in the instruction string
@@ -110,8 +109,8 @@ program_var = project.arch
 reg = program_var.get_register_offset(register_name)
 
 # CodeLocations are part of the DDG
-cl1 = CodeLocation(0x404a1b, ins_addr=0x404a25, stmt_idx=63)
-instr_view = ddg.view[0x404a25]
+cl1 = CodeLocation(0x404b27, ins_addr=0x404b2b, stmt_idx=40)
+instr_view = ddg.view[0x404b2b]
 # Getting variables and their dependencies form the ddg nodes
 definitions: list = instr_view.definitions
 var = None
@@ -193,11 +192,11 @@ cdg = project.analyses.CDG(cfg, start=target_function.rebased_addr)
 # for node1 in ddg_sub.nodes:
 #     print(node1)
 
-ddg.find_sources(pv1, simplified_graph=False)
+sources = ddg.find_sources(pv1, simplified_graph=False)
 #
 #
 # print("input", var)
-bs = VariableBackwardSlicing(cfg, cdg=cdg, ddg=ddg, variable=pv1, project=project, targets=loc)
+bs = VariableBackwardSlicing(cfg, cdg=cdg, ddg=ddg, variable=pv1.variable, project=project, targets=loc)
 #
 # for ins in bs.chosen_statements_addrs:
 #     print(hex(ins))
@@ -211,11 +210,28 @@ bs = VariableBackwardSlicing(cfg, cdg=cdg, ddg=ddg, variable=pv1, project=projec
 
 for stat, ids in bs.chosen_statements.items():
     print("STATEMENT ", stat)
-    for id in ids:
-        print(id)
+    # project.factory.block(stat).vex.pp()
+    # for id in ids:
+    #     print(id)
 
-constraints = ConstraintSolver(project)
-results = constraints.solve(bs.chosen_statements, 0x400000, 0x404a25, True, 0x404a25)
+constraints = ConstraintSolver(project,instruction.address - 1)
+results = constraints.solve(bs.chosen_statements, 0x413694, 0x404b2a, pv1.variable)
+solver = constraints.solver
+
+while solver.check() != z3.sat:
+    solver.pop()
+
+model = solver.model()
+s= model.sexpr()
+t = model.decls()
+f = solver.assertions()
+print(solver)
+
+
+
+
+
+print(solver)
 for result , _  in results:
     testst = str(result)
     number = re.search(r'\d+', testst).group()

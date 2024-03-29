@@ -320,7 +320,7 @@ class Patching:
                     variable = definition._variable
                     location = [definition._variable.location]
 
-        solver = ConstraintSolver(self.project_patch)
+        solver = ConstraintSolver(self.project_patch, instruction_patch.address -1)
         # Calculate Address where the value of the PARAM reference need to be written
 
         jump_target = old_reference.toAddr
@@ -335,7 +335,7 @@ class Patching:
         if jump_target < self.writing_address:
             subtraction = True
             subtraction_address = reference.fromAddr
-        results = solver.solve(backward_slice.chosen_statements, jump_target, self.writing_address, subtraction, subtraction_address)
+        results = solver.solve(backward_slice.chosen_statements, jump_target, self.writing_address, variable.variable, subtraction, subtraction_address)
 
 
 
@@ -436,13 +436,13 @@ class Patching:
 
 
 
-        outside_shift_descending.start = self.writing_address
+        outside_shift_descending.start = self.writing_address + number_shifted_bytes + 2
         outside_shift_ascending.shifted_bytes = number_shifted_bytes
         outside_shift_descending.shifted_bytes = number_shifted_bytes
 
         if len(self.shifts_ascending) > 0:
             self.shifts_ascending[len(self.shifts_ascending)-1].end = outside_shift_ascending.start
-            self.shifts_descending[len(self.shifts_descending)-1].end = self.writing_address
+            self.shifts_descending[len(self.shifts_descending)-1].end = outside_shift_descending.start
 
         self.shifts_ascending.append(outside_shift_ascending)
         self.shifts_descending.append(outside_shift_descending)
@@ -659,7 +659,7 @@ class Patching:
                     variable = definition._variable
                     location = [definition._variable.location]
 
-        solver = ConstraintSolver(self.project_patch)
+        solver = ConstraintSolver(self.project_patch, instruction_patch.address-1)
 
         backward_slice = VariableBackwardSlicing(cfg=self.cfge_patch_specific,
                                                  ddg=self.ddg_patch_specific,
@@ -672,7 +672,7 @@ class Patching:
         if self.new_memory_data_address is None:
            self.new_memory_data_address = self.new_memory_writing_address + 100
 
-        results = solver.solve(backward_slice.chosen_statements, self.new_memory_writing_address, self.writing_address)
+        results = solver.solve(backward_slice.chosen_statements, self.new_memory_writing_address, self.writing_address, variable.variable)
 
         if results is None:
             return
@@ -773,7 +773,16 @@ class Patching:
         xrefs = self.shift_references
         for ref in xrefs:
             jump_target = ref.toAddr
-            if self.isInShiftListZone(jump_target, "asc") != -1:
+            if ref.toAddr < ref.fromAddr:
+                condition = self.isInShiftListZone(ref.fromAddr, "asc")
+                if ref.toAddr < patch_start_address_of_patch:
+                    condition = -1
+            else:
+                condition = self.isInShiftListZone(jump_target, "desc")
+                if ref.toAddr > patch_end:
+                    condition = -1
+            if condition != -1:
+
                 instruction = shift_backend.factory.block(ref.fromAddr+1).disassembly.insns[0]
                 start_addr = ref.fromAddr
                 refT = start_addr
@@ -835,7 +844,7 @@ class Patching:
                 return len(self.shifts_ascending)
             return -1
         else:
-            for i in range(len(self.shifts_descending)):
+            for i in range(len(self.shifts_descending)-1, -1, -1):
                 # printf("\n\t Shifted at %s", shifts.get(i).start);
                 # printf("\n\t Shifted at %s", shifts.get(i).end);
                 if self.shifts_descending[i].isInsideShiftZone(ref):
@@ -854,11 +863,13 @@ class Patching:
         jump_target = ref_end
         if start >= len(self.shifts_descending):
             start = len(self.shifts_descending)-1
-        for i in range(start, 0, -1):
+        for i in range(start, -1, -1):
             shift_bytes = shift_bytes + self.shifts_descending[i].smallerThanShiftZone(ref_end)
             if self.shifts_descending[i].isInsideShiftZone(ref_end):
                 jump_target = ref_end - shift_bytes
                 return jump_target
+
+        jump_target = ref_end - shift_bytes
         return jump_target
 
     def adding_shift_to_address(self, ref_start, ref_end):
