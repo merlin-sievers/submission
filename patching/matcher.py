@@ -14,11 +14,11 @@ class Matcher:
         # results = config.openBindiffResults()
 
         # Get angr BinDiff results
-        bindiff_results = project_vuln.analyses.BinDiff(project_patch)
+        self.bindiff_results = project_vuln.analyses.BinDiff(project_patch, cfg_a=cfg_vuln, cfg_b=cfg_patch)
 
 
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
-        for tuple in bindiff_results.identical_blocks:
+        for tuple in self.bindiff_results.identical_blocks:
             self.match_old_address[tuple[0].addr] = tuple[1].addr
             self.match_new_address[tuple[1].addr] = tuple[0].addr
 
@@ -62,8 +62,8 @@ class Matcher:
 class RefMatcher:
 
     # TODO: Write constructor in a way that it takes the project of the vulnerable and the patched version and gets all the references
-    def __init__(self):
-        self.bindiff_results = None
+    def __init__(self, bindiff_results):
+        self.bindiff_results = bindiff_results
         self.match_to_old_address = dict()
         self.match_to_new_address = dict()
         self.match_from_old_address = dict()
@@ -71,7 +71,7 @@ class RefMatcher:
 
     def match_references_from_perfect_matched_blocks(self, perfect_matches, refs_vuln, refs_patch, project_vuln, project_patch):
         # TODO: Match References if they are in a perfectly matched BasicBlock in the Function and outside of the Function
-        self.bindiff_results = project_vuln.analyses.BinDiff(project_patch)
+        # self.bindiff_results = project_vuln.analyses.BinDiff(project_patch)
         for ref_vuln in refs_vuln:
             if ref_vuln.refType != "read":
                 for addr in perfect_matches.match_old_address:

@@ -24,16 +24,16 @@ from variable_backward_slicing import VariableBackwardSlicing
 
 
 # loading the patch binary to perform backward slicing
-project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs= False)
+project = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs= False)
 
 # project = angr.Project("Testsuite/vuln_test_detoured", auto_load_libs= False)
 
 # Getting the target function
 target_function = project.loader.find_symbol("png_check_keyword")
 
-# file_to_be_patched = SectionExtender("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", 1024).extend_last_section_of_segment()
+file_to_be_patched = SectionExtender("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", 4096).extend_last_section_of_segment()
 
-# backend = DetourBackend("Testsuite/vuln_test_detoured")
+backend = DetourBackend(file_to_be_patched)
 # patches = []
 # patch = AddLabelPatch(0x4049f4, "test")
 # patches.append(patch)
@@ -46,7 +46,7 @@ target_function = project.loader.find_symbol("png_check_keyword")
 # patches = [InlinePatch(target_function.rebased_addr, "b 0x4049f1", is_thumb=True)]
 # backend.apply_patches(patches)
 
-# backend.save("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0_TEST")
+backend.save("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0_TEST")
 # test_project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0_TEST", auto_load_libs=False)
 cfg = project.analyses.CFGFast()
 # Building the CFGEmulated for the target function in order to be able to build the DDG

@@ -78,10 +78,10 @@ class Patching:
         # }
 
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
-        perfect_matches = Matcher(self.cfg_vuln, self.cfg_patch, self.project_vuln, self.project_patch)
+        perfect_matches = Matcher(self.cfge_vuln_specific, self.cfge_patch_specific, self.project_vuln, self.project_patch)
 
         # Getting all References from both the vulnerable Program and the patch Program
-        matched_refs = RefMatcher()
+        matched_refs = RefMatcher(bindiff_results=perfect_matches.bindiff_results)
         refs_vuln = matched_refs.get_refs(self.project_vuln, self.patching_config.functionName)
         self.refs_patch = matched_refs.get_refs(self.project_patch, self.patching_config.functionName)
 
@@ -108,7 +108,7 @@ class Patching:
         # Create a new memory section to write the patch into
         # CURRENTLY: We try to use lief to extend the last section of the LOAD segment
 
-        file_to_be_patched = SectionExtender(binary_fname, 1024).extend_last_section_of_segment()
+        file_to_be_patched = SectionExtender(binary_fname, 4096).extend_last_section_of_segment()
 
         # file_to_be_patched = SectionExtender(binary_fname, 1024).add_section()
 
