@@ -20,6 +20,11 @@ from variable_backward_slicing import VariableBackwardSlicing
 # logging.getLogger('angr').setLevel('DEBUG')
 # logging.getLogger('angr.analyses').setLevel('DEBUG')
 
+register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr))')
+        # Find all matches in the instruction string
+matches = register_pattern.findall("ldr r1,r1")
+        # Extract the first match (assuming there is at least one match)
+register_name = matches[0]
 
 
 
@@ -31,13 +36,13 @@ project = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto
 # Getting the target function
 target_function = project.loader.find_symbol("png_check_keyword")
 
-file_to_be_patched = SectionExtender("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", 4096).extend_last_section_of_segment()
+# file_to_be_patched = SectionExtender("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", 4096).extend_last_section_of_segment()
 
-backend = DetourBackend(file_to_be_patched)
+backend = DetourBackend("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0")
 # patches = []
 # patch = AddLabelPatch(0x4049f4, "test")
 # patches.append(patch)
-# code = backend.compile_asm("bne $+0x1e", base=0x5af0, is_thumb=True)
+code = backend.compile_asm("mov ip, lr", base=target_function.rebased_addr+3,  is_thumb=True)
 # patch = InlinePatch(0x40f9f0, "b _png_check_keyword", is_thumb=True)
 # # patch = InlinePatch(0x415a36, "beq #0x166", is_thumb=True)
 # patches.append(patch)
@@ -63,8 +68,9 @@ print(target_block.arch)
 
 target_block = project.factory.block(target_function.rebased_addr)
 #
-
-
+string = target_block.disassembly.insns[0].mnemonic + " " + target_block.disassembly.insns[0].op_str
+address = target_block.disassembly.insns[0].address-1
+code = backend.compile_asm(string, base=target_block.disassembly.insns[0].address-1, is_thumb=True)
 
 
 

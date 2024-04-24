@@ -1,5 +1,6 @@
 import pyvex.stmt
 import z3
+from angr.sim_variable import SimTemporaryVariable
 
 
 # Assumptions Vex is only in SSA Form inside of a basic block.
@@ -73,12 +74,16 @@ class ConstraintSolver:
 
         # Solve equation system so that it jumps to the target
 
+
         new_target = z3.BitVecVal(jump_target, 32)
 
         if self.variables == []:
             return None
 
-        register = z3.BitVec("r" + str(variable.reg), 32)
+        if isinstance(variable, SimTemporaryVariable):
+            register = z3.BitVec("t" + self.basic_block_ssa + str(variable.tmp_id), 32)
+        else:
+            register = z3.BitVec("r" + str(variable.reg), 32)
         if len(self.used_registers) == 0:
             self.used_registers.append(register)
 
@@ -166,7 +171,10 @@ class ConstraintSolver:
         pass
 
     def _handle_vex_stmt_LoadG(self, statement, address, writing_address):
-        load = z3.BitVec(str(statement.addr), 32)
+        if statement.addr.tag_int == 11:
+            load = z3.BitVec(str(statement.addr), 32)
+        else:
+            load = self._handle_vex_expr(statement.addr, address, writing_address)
         alt = self._handle_vex_expr(statement.alt, address, writing_address)
         guard = self._handle_vex_expr(statement.guard, address, writing_address)
         tmp = z3.BitVec("t" + self.basic_block_ssa + str(statement.dst), 32)
@@ -260,7 +268,7 @@ class ConstraintSolver:
 
     # TODO: Validate that i consider every constant bigger than 20000 to be an address//  Could use the entry point of the program here...
     def _handle_vex_expr_Const(self, expression, address, writing_address):
-        new_address = expression.con.value - address + writing_address
+        new_address = expression.con.value + writing_address - self.start_address
         if expression.con.value > 20000:
             expr = z3.BitVecVal(new_address, 32)
         else:

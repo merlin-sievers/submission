@@ -11,11 +11,26 @@ from angrutils import plot_cfg
 # logging.getLogger('angr').setLevel('DEBUG')
 # logging.getLogger('angr.analyses').setLevel('DEBUG')
 
-project1 = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs=False)
+# project1 = angr.Project("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0", auto_load_libs=False)
 # project = angr.Project("/Users/sebastian/Tools/Project/fauxware", engine=angr.engines.UberEnginePcode, auto_load_libs=False)
-project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs=False)
+# project = angr.Project("/Users/sebastian/Public/Arm_66/libpng10.so.0.66.0", auto_load_libs=False)
 # project = angr.Project("/Users/sebastian/Public/libcurl-7.24/libcurl.so.7.24.0", engine=angr.engines.UberEnginePcode, auto_load_libs=False)
 
+project = angr.Project("Testsuite/LibXML/libxml2.so.2.9.3", auto_load_libs=False)
+project1 = angr.Project("Testsuite/LibXML/libxml2.so.2.9.4", auto_load_libs=False)
+
+cfg_a = project.analyses.CFGFast()
+cfg_b = project1.analyses.CFGFast()
+
+target_function = project.loader.find_symbol("xmlParserPrintFileContextInternal")
+target_function1 = project1.loader.find_symbol("xmlParserPrintFileContextInternal")
+
+
+cfg_ae = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=1, starts=[target_function.rebased_addr])
+cfg_be = project1.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, context_sensitivity_level=1, starts=[target_function1.rebased_addr])
+
+
+bindiff_results = project.analyses.BinDiff(project1, cfg_a=cfg_ae, cfg_b=cfg_be)
 
 target_function = project.loader.find_symbol("png_check_keyword")
 target_function1 = project1.loader.find_symbol("png_check_keyword")

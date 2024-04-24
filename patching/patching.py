@@ -2,7 +2,7 @@ import re
 import pickle
 import os
 import angr
-from angr.sim_variable import SimRegisterVariable
+from angr.sim_variable import SimRegisterVariable, SimTemporaryVariable
 
 from patcherex.patches import *
 
@@ -42,7 +42,7 @@ class Patching:
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
         # TODO: Find a better option to get the end
         self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size
-        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
+        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=2, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
 
         self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs = False)
         # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
@@ -51,7 +51,7 @@ class Patching:
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
         self.end_patch = self.entry_point_patch + self.project_patch.loader.find_symbol(self.patching_config.functionName).size
 
-        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs, starts=[self.entry_point_patch])
+        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=2, state_add_options=angr.sim_options.refs, starts=[self.entry_point_patch])
         self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
         self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
 
@@ -82,12 +82,13 @@ class Patching:
 
         # Getting all References from both the vulnerable Program and the patch Program
         matched_refs = RefMatcher(bindiff_results=perfect_matches.bindiff_results)
-        refs_vuln = matched_refs.get_refs(self.project_vuln, self.patching_config.functionName)
-        self.refs_patch = matched_refs.get_refs(self.project_patch, self.patching_config.functionName)
+        refs_vuln = matched_refs.get_refs(self.project_vuln, self.cfge_vuln_specific, self.entry_point_vuln)
+        self.refs_patch = matched_refs.get_refs(self.project_patch, self.cfge_patch_specific, self.entry_point_patch)
+
 
         # Match all References
         matched_refs.match_references_from_perfect_matched_blocks(perfect_matches, refs_vuln, self.refs_patch, self.project_vuln, self.project_patch)
-        s = matched_refs.match_from_new_address
+        s = matched_refs.address_to_refs
         # Preparation for writing the Patch in the vulnerable Version
 
         vulnerable_blocks = perfect_matches.get_not_matched_blocks(self.cfge_vuln_specific, self.entry_point_vuln, self.end_vuln, perfect_matches.match_old_address)
@@ -124,6 +125,9 @@ class Patching:
         if self.code_block_start.thumb:
             start_address_of_patch = start_address_of_patch - 1
         self.jump_to_new_memory(start_address_of_patch, new_memory_address)
+        # TODO: Check and update for thumb and not thumb
+        new_memory_address = new_memory_address + 2
+
 
         self.cfg_patch.get_any_node(patch_start_address_of_patch)
 
@@ -193,10 +197,17 @@ class Patching:
         :param base_address: Address of the instruction to be patched
         :param target_address: Address of the target instruction
         """
-
-        target_address = str(hex(target_address))
-        patches = InlinePatch(base_address, "bl " + target_address, is_thumb=self.code_block_start.thumb)
+        patches = InlinePatch(base_address, "mov ip, lr", is_thumb=self.code_block_start.thumb)
         self.patches.append(patches)
+        base_address = base_address + 2
+        target_address_str = str(hex(target_address))
+        patches = InlinePatch(base_address, "bl " + target_address_str, is_thumb=self.code_block_start.thumb)
+        self.patches.append(patches)
+
+        patches = InlinePatch(target_address, "mov lr, ip", is_thumb=self.code_block_start.thumb)
+        self.patches.append(patches)
+
+
         # self.backend.apply_patches(patches)
 
 
@@ -217,10 +228,11 @@ class Patching:
             #     else:
             #         pass
             # else:
-            if ref.fromAddr == instruction.address:
-                references.append(ref)
-                if ref.refType == "read":
-                    return ref
+            if ref == instruction.address:
+                references = (refs[ref])
+                for r in refs[ref]:
+                    if r.refType == "read":
+                        return r
                 else:
                     pass
         if len(references) >= 1:
@@ -243,10 +255,10 @@ class Patching:
 
         # First check if from Address of Reference is perfectly matched
         if reference.fromAddr in matched_refs.match_from_new_address:
-            self.handle_matched_reference(reference, matched_refs.match_from_new_address[reference.fromAddr], instruction_patch, matched_refs)
+            self.handle_matched_reference(reference, matched_refs.match_from_new_address[reference.fromAddr][0], instruction_patch, matched_refs)
         # Check if the To Address of the Reference is perfectly matched
         elif reference.toAddr in matched_refs.match_to_new_address:
-            self.handle_matched_reference(reference, matched_refs.match_to_new_address[reference.toAddr], instruction_patch, matched_refs)
+            self.handle_matched_reference(reference, matched_refs.match_to_new_address[reference.toAddr][0], instruction_patch, matched_refs)
 
         # If the Reference is not perfectly matched
         else:
@@ -272,7 +284,7 @@ class Patching:
 
         # Tracking Register for later backward slicing and static analysis
 
-        register_pattern = re.compile(r'(r\d+|sb|sl)')
+        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr))')
 
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction_patch.op_str)
@@ -320,6 +332,16 @@ class Patching:
                     variable = definition._variable
                     location = [definition._variable.location]
 
+        if variable is None:
+            max = 0
+            for definition in definitions:
+                if len(definition.dependents) > 0:
+                    if isinstance(definition._variable.variable, SimTemporaryVariable):
+                        if max < definition._variable.location.stmt_idx:
+                            max = definition._variable.location.stmt_idx
+                            variable = definition._variable
+
+
         solver = ConstraintSolver(self.project_patch, instruction_patch.address -1)
         # Calculate Address where the value of the PARAM reference need to be written
 
@@ -335,7 +357,7 @@ class Patching:
         if jump_target < self.writing_address:
             subtraction = True
             subtraction_address = reference.fromAddr
-        results = solver.solve(backward_slice.chosen_statements, jump_target, self.writing_address, variable.variable, subtraction, subtraction_address)
+        results = solver.solve(backward_slice.chosen_statements, jump_target, self.writing_address, variable.variable)
 
 
 
@@ -348,15 +370,10 @@ class Patching:
             self.patches.append(patches)
             # self.backend.apply_patches(patches)
 
+        # Write the new instruction to the new memory
 
-        if subtraction:
-            new_string = "sub " + instruction_patch.op_str + " sl"
-            patches = InlinePatch(self.writing_address, new_string, self.is_thumb)
-            self.patches.append(patches)
-            # self.backend.apply_patches(patches)
-        else:
-            self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
-            self.writing_address = self.writing_address + instruction_patch.size
+        self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+        self.writing_address = self.writing_address + instruction_patch.size
 
 
 
@@ -529,6 +546,14 @@ class Patching:
         elif reference.refType == "offset":
             self.add_offset_reference(reference, instruction_patch)
         elif reference.refType == "control_flow_jump":
+            symbol_patch = self.project_patch.loader.find_symbol(reference.toAddr)
+            if symbol_patch is not None:
+                target = self.project_vuln.loader.find_symbol("gzwrite")
+                if target is not None:
+                    self.reassemble_reference_at_different_address(instruction_patch, target.rebased_addr, self.writing_address)
+                    self.writing_address = self.writing_address + instruction_patch.size
+                    return
+
             self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
             shift_reference = Reference(self.writing_address, self.writing_address + reference.toAddr - reference.fromAddr, "control_flow_jump")
             self.shift_references.append(shift_reference)
@@ -538,12 +563,30 @@ class Patching:
 
     def add_read_reference(self, instruction_patch, reference, matched_refs):
 
-        # Tracking register
+        # # Tracking register
+        # offset = self.get_offset_reference_from_instruction(instruction_patch)
+        #
+        # if offset is not None:
+        #     reference = offset
 
-        register_pattern = re.compile(r'(r\d+|sb|sl)')
+        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr))')
 
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction_patch.op_str)
+
+        # Handle cases like ldr r1, [r0, #4] or ldr r1, [r0, r2]
+        if len(matches) > 1:
+            new_target = None
+            if reference.toAddr in matched_refs.match_to_new_address:
+                new_target = matched_refs.match_to_new_address[reference.toAddr][0]
+            elif reference.fromAddr in matched_refs.match_from_new_address:
+                new_target = matched_refs.match_from_new_address[reference.fromAddr][0]
+
+            self.handle_read_offset(instruction_patch, reference, matches, new_target.toAddr)
+            return
+
+
+
 
         # Extract the first match (assuming there is at least one match)
         register_name = matches[0]
@@ -561,18 +604,7 @@ class Patching:
 
         patches = InlinePatch(self.writing_address, new_instruction_string, is_thumb=self.is_thumb)
         self.patches.append(patches)
-        # self.backend.apply_patches(patches)
 
-
-
-        # Calculate data address (relative to pc)
-        # if instruction_patch.size == 2:
-        #     if (self.writing_address + difference) % 4 != 0:
-        #         pc = 2
-        #     else:
-        #         pc = 4
-        # else:
-        #     pc = 0
 
         pc = 2
         alignment = (self.writing_address + difference + pc) % 4
@@ -582,54 +614,39 @@ class Patching:
         self.shift_references.append(shift_reference)
 
         # Check if there is an offset reference as well from this instruction
-        offset_reference = self.get_offset_reference_from_instruction(instruction_patch)
-        # Check if the offset reference is perfectly matched
-        if offset_reference is not None:
-            # If it is perfectly match we can just take the value of the offset address and write it at the address of the reference.toAddr
-            if offset_reference.toAddr in matched_refs.match_to_new_address:
-                new_target = matched_refs.match_to_new_address[offset_reference.toAddr]
-                data = new_target.toAddr.to_bytes(4, byteorder='little')
-                patches = RawMemPatch(data_address, data)
-                # self.backend.apply_patches(patches)
-                self.patches.append(patches)
-            # Else we need to add the actual data to the new memory as well...
-            else:
-                # Get the data we need to add to the vulnerable program
-                if offset_reference.toAddr <= self.project_patch.loader.min_addr:
-                    data = offset_reference.toAddr.to_bytes(4, byteorder='little')
-                    patches = RawMemPatch(data_address, data)
-                    self.patches.append(patches)
-                    # self.backend.apply_patches(patches)
-                else:
-                    data = self.load_data_from_memory(offset_reference.toAddr)
-                    patches = RawMemPatch(self.new_memory_writing_address, data)
-                # Write the address of the data as a data to be read
-                    self.patches.append(patches)
-                    # self.backend.apply_patches(patches)
-                    data_to_be_read = self.new_memory_writing_address.to_bytes(4, byteorder='little')
-
-                    patches = RawMemPatch(data_address, data_to_be_read)
-                    self.patches.append(patches)
-                    # self.backend.apply_patches(patches)
-                    self.new_memory_writing_address = self.new_memory_writing_address + len(data) + 4
+        # offset_reference = self.get_offset_reference_from_instruction(instruction_patch)
+        # # Check if the offset reference is perfectly matched
+        # if offset_reference is not None:
+        #     # If it is perfectly match we can just take the value of the offset address and write it at the address of the reference.toAddr
+        #     if offset_reference.toAddr in matched_refs.match_to_new_address:
+        #         new_target = matched_refs.match_to_new_address[offset_reference.toAddr][0]
+        #         data = new_target.toAddr.to_bytes(4, byteorder='little')
+        #         patches = RawMemPatch(data_address, data)
+        #         # self.backend.apply_patches(patches)
+        #         self.patches.append(patches)
+        #     # Else we need to add the actual data to the new memory as well...
+        #     else:
+        #         # Get the data we need to add to the vulnerable program
+        #         if offset_reference.toAddr <= self.project_patch.loader.min_addr:
+        #             data = offset_reference.toAddr.to_bytes(4, byteorder='little')
+        #             patches = RawMemPatch(data_address, data)
+        #             self.patches.append(patches)
+        #             # self.backend.apply_patches(patches)
+        #         else:
+        #             data = self.load_data_from_memory(offset_reference.toAddr)
+        #             patches = RawMemPatch(self.new_memory_writing_address, data)
+        #         # Write the address of the data as a data to be read
+        #             self.patches.append(patches)
+        #             # self.backend.apply_patches(patches)
+        #             data_to_be_read = self.new_memory_writing_address.to_bytes(4, byteorder='little')
+        #
+        #             patches = RawMemPatch(data_address, data_to_be_read)
+        #             self.patches.append(patches)
+        #             # self.backend.apply_patches(patches)
+        #             self.new_memory_writing_address = self.new_memory_writing_address + len(data) + 4
 
 
         self.writing_address = self.writing_address + instruction_patch.size
-
-
-        # # Jump to new memory
-        # hex_new_memory_writing_address = hex(self.new_memory_writing_address)
-        # patches = [InlinePatch(self.writing_address, "bl " + hex_new_memory_writing_address, is_thumb=self.is_thumb)]
-        # self.backend.apply_patches(patches)
-        #
-        # if instruction_patch.size == 2:
-        #     self.remember_shifted_bytes(2)
-
-        # At the new memory address put the instruction with the load Reference
-        # target_address = self.new_memory_writing_address + 12
-
-        # self.reassemble_reference_at_different_address(instruction_patch, target_address, self.new_memory_writing_address)
-        # self.new_memory_writing_address = self.new_memory_writing_address + instruction_patch.size
 
         # Save this load data address in the corresponding register
         register = TrackingRegister(register_name, data_address, reference.toAddr)
@@ -637,11 +654,6 @@ class Patching:
         # Add the register to the list of registers that need to be tracked
         self.new_def_registers.append(register)
 
-        # Write the jump back to the original code
-        # patches = [InlinePatch(self.new_memory_writing_address, "bx lr", is_thumb=self.is_thumb)]
-
-        # self.backend.apply_patches(patches)
-        # self.new_memory_writing_address = target_address + 8
 
     def add_offset_reference(self, reference, instruction_patch):
 
@@ -658,6 +670,13 @@ class Patching:
                 if(definition._variable.variable.reg == register):
                     variable = definition._variable
                     location = [definition._variable.location]
+
+
+        if variable is None:
+            self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+            self.writing_address = self.writing_address + instruction_patch.size
+            return
+
 
         solver = ConstraintSolver(self.project_patch, instruction_patch.address-1)
 
@@ -737,7 +756,7 @@ class Patching:
                             value = value
                         data = value.to_bytes(4, byteorder='little')
                         affected_registers.append((res, data))
-                        self.new_def_registers.remove(res)
+                        # self.new_def_registers.remove(res)
                 # offset = int(offset)
                 # reg_offset = self.project_patch.arch.get_register_offset(res.register_name)
                 # if reg_offset == offset:
@@ -750,25 +769,25 @@ class Patching:
 
     def get_offset_reference_from_instruction(self, instruction_patch):
         for ref in self.refs_patch:
-            if self.is_thumb:
-                if ref.fromAddr == instruction_patch.address - 1:
-                    if ref.refType == "offset":
-                        return ref
-                else:
-                    pass
-            elif ref.fromAddr == instruction_patch.address:
-                if ref.refType == "offset":
-                    return ref
-                else:
-                    pass
+            # if self.is_thumb:
+            #     if ref == instruction_patch.address - 1:
+            #         for r in self.refs_patch[ref]:
+            #             if r.refType == "offset":
+            #                 return r
+            #             else:
+            #                 pass
+            # elif
+            if ref == instruction_patch.address:
+                for r in self.refs_patch[ref]:
+                    if r.refType == "offset":
+                        return r
+                    else:
+                        pass
 
     def fix_shifts_in_references(self, patch_start_address_of_patch, shift_backend):
 
         patch_end = self.shifts_ascending[-1].end
 
-        # while patch_start_address_of_patch <= patch_end:
-        #
-        #     xrefs = self.backend.project.analyses.XRefs(block=self.backend.project.factory.block(patch_start_address_of_patch))
         self.patches = []
         xrefs = self.shift_references
         for ref in xrefs:
@@ -832,7 +851,7 @@ class Patching:
 
     def isInShiftListZone(self, ref, order):
 
-#     print("\n\t IsInShiftList " + "%s %s", shifts.get(shifts.size() - 1).start, shifts.get(shifts.size() - 1).end);
+#       print("\n\t IsInShiftList " + "%s %s", shifts.get(shifts.size() - 1).start, shifts.get(shifts.size() - 1).end);
         if order == "asc":
             for i in range(len(self.shifts_ascending)):
                 # printf("\n\t Shifted at %s", shifts.get(i).start)
@@ -886,7 +905,77 @@ class Patching:
         return jump_target
 
 
+    # Handle read case where something is read from two registers or a register plus a value
+    def handle_read_offset(self, instruction_patch, reference, matches, new_target):
+        instr_view = self.ddg_patch_specific.view[instruction_patch.address]
+        definitions: list = instr_view.definitions
+        variable = None
+        location = None
 
+        register = self.get_register_from_instruction(instruction_patch, self.project_patch.arch)
+
+        for definition in definitions:
+            #     Now only take the register variable
+            if isinstance(definition._variable.variable, SimRegisterVariable):
+                if (definition._variable.variable.reg == register):
+                    variable = definition._variable
+                    location = [definition._variable.location]
+
+        if variable is None:
+            max = 0
+            for definition in definitions:
+                if len(definition.dependents) > 0:
+                    if isinstance(definition._variable.variable, SimTemporaryVariable):
+                        if max < definition._variable.location.stmt_idx:
+                            max = definition._variable.location.stmt_idx
+                            variable = definition._variable
+
+
+        if self.is_thumb:
+            thumb = 1
+        else:
+            thumb = 0
+        solver = ConstraintSolver(self.project_patch, instruction_patch.address - thumb)
+        # Calculate Address where the value of the PARAM reference need to be written
+
+
+        if new_target is None or (new_target < self.writing_address):
+            new_target = self.new_memory_writing_address
+
+            data = self.load_data_from_memory(reference.toAddr)
+            # Write the data to the new memory address
+            patches = RawMemPatch(self.new_memory_writing_address, data)
+            self.patches.append(patches)
+
+
+
+
+        backward_slice = VariableBackwardSlicing(cfg=self.cfge_patch_specific,
+                                                 ddg=self.ddg_patch_specific,
+                                                 cdg=self.cdg_patch_specific,
+                                                 project=self.project_patch,
+                                                 variable=variable, targets=location)
+
+        results = solver.solve(backward_slice.chosen_statements, new_target, self.writing_address,
+                               variable.variable)
+
+        if results is None:
+            return
+
+        # TODO: What if there is a register in results that is not in the new_def_registers list?  Then there is no information of where to put the data
+        # Get all affected registers, i.e. intersection of new_def_registers and results
+        affected_registers = self.get_affected_registers(results)
+
+        for (register, data) in affected_registers:
+            # Write the data to the ldr_data_address
+            patches = RawMemPatch(register.ldr_data_address, data)
+            self.patches.append(patches)
+            # self.backend.apply_patches(patches)
+
+
+
+        self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+        self.writing_address = self.writing_address + instruction_patch.size
 
     # Static methods
     @staticmethod
@@ -906,7 +995,7 @@ class Patching:
 
     @staticmethod
     def get_register_from_instruction(instruction, arch):
-        register_pattern = re.compile(r'(r\d+|sb|sl)')
+        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr))')
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction.op_str)
         # Extract the first match (assuming there is at least one match)
