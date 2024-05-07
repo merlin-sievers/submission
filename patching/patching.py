@@ -117,6 +117,10 @@ class Patching:
         self.backend = DetourBackend(file_to_be_patched)
         new_memory_address = self.project_vuln.loader.main_object.segments[0].vaddr + self.project_vuln.loader.main_object.segments[0].memsize
 
+
+
+
+
         # Estimate size of patch to find space for newly added references and data
         self.new_memory_writing_address = new_memory_address + 2 * (self.patch_code_block_end.addr - self.patch_code_block_start.addr)
 
@@ -124,7 +128,11 @@ class Patching:
         print(start_address_of_patch)
         if self.code_block_start.thumb:
             start_address_of_patch = start_address_of_patch - 1
-        self.jump_to_new_memory(start_address_of_patch, new_memory_address)
+            patch = patch_start_address_of_patch - 1
+            if (new_memory_address % 4) == (patch % 4):
+                new_memory_address = new_memory_address + 2
+
+        self.jump_to_new_memory(start_address_of_patch, new_memory_address, patch_start_address_of_patch)
         # TODO: Check and update for thumb and not thumb
         new_memory_address = new_memory_address + 2
 
@@ -191,7 +199,7 @@ class Patching:
     #             asmVuln.assemble(next, "bl 0x" + codeBlockEnde.getMaxAddress().next())
 
 
-    def jump_to_new_memory(self, base_address, target_address):
+    def jump_to_new_memory(self, base_address, target_address, patch_start_address_of_patch):
         """
         Write a branch to target_address instruction at base_address
         :param base_address: Address of the instruction to be patched
@@ -200,6 +208,7 @@ class Patching:
         patches = InlinePatch(base_address, "mov ip, lr", is_thumb=self.code_block_start.thumb)
         self.patches.append(patches)
         base_address = base_address + 2
+
         target_address_str = str(hex(target_address))
         patches = InlinePatch(base_address, "bl " + target_address_str, is_thumb=self.code_block_start.thumb)
         self.patches.append(patches)
