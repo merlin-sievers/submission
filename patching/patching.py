@@ -37,23 +37,33 @@ class Patching:
         # TODO: Add path to the binary as an argument for the configuration
         self.project_vuln = angr.Project(self.patching_config.binary_path, auto_load_libs= False)
         # self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/vuln_test_3", auto_load_libs= False)
+        print("\n\t Starting to analyze the vulnerable Program CFGFast...")
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
 
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
         # TODO: Find a better option to get the end
         self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size
-        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=2, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
+        print("\n\t Starting to analyze the vulnerable Program CFGEmul...")
+
+        #TODO: Check if the context_sensitivity_level is correct
+        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
 
         self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs = False)
         # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
 
+        print("\n\t Starting to analyze the patch Program CFGFast...")
         self.cfg_patch = self.project_patch.analyses.CFGFast()
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
         self.end_patch = self.entry_point_patch + self.project_patch.loader.find_symbol(self.patching_config.functionName).size
 
-        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=2, state_add_options=angr.sim_options.refs, starts=[self.entry_point_patch])
+        print("\n\t Starting to analyze the patch Program CFGEmul...")
+        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[self.entry_point_patch])
+
+        print("\n\t Starting to analyze the patch Program DDG...")
         self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
-        self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
+        # self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
+        self.cdg_patch_specific = None
+
 
         self.refs_patch= None
         self.patches = []
@@ -77,6 +87,7 @@ class Patching:
         # printf("\n\t WARNING LR NOT PUSHED TO STACK");
         # }
 
+        print("\n\t Starting Patching Process...")
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
         perfect_matches = Matcher(self.cfge_vuln_specific, self.cfge_patch_specific, self.project_vuln, self.project_patch)
 
@@ -85,14 +96,20 @@ class Patching:
         refs_vuln = matched_refs.get_refs(self.project_vuln, self.cfge_vuln_specific, self.entry_point_vuln)
         self.refs_patch = matched_refs.get_refs(self.project_patch, self.cfge_patch_specific, self.entry_point_patch)
 
-
+        print("\n\t Starting to match References...")
         # Match all References
-        matched_refs.match_references_from_perfect_matched_blocks(perfect_matches, refs_vuln, self.refs_patch, self.project_vuln, self.project_patch)
+        matched_refs.match_references_from_perfect_matched_blocks(perfect_matches, refs_vuln, self.refs_patch, self.project_vuln, self.project_patch, self.entry_point_patch, self.end_patch)
         s = matched_refs.address_to_refs
         # Preparation for writing the Patch in the vulnerable Version
 
         vulnerable_blocks = perfect_matches.get_not_matched_blocks(self.cfge_vuln_specific, self.entry_point_vuln, self.end_vuln, perfect_matches.match_old_address)
         patch_blocks = perfect_matches.get_not_matched_blocks(self.cfge_patch_specific, self.entry_point_patch, self.end_patch, perfect_matches.match_new_address)
+
+        print(patch_blocks)
+
+        if vulnerable_blocks == []:
+            print("No vulnerable Blocks found")
+            return
 
         start_address_of_patch = min(vulnerable_blocks)
 
@@ -108,6 +125,9 @@ class Patching:
 
         # Create a new memory section to write the patch into
         # CURRENTLY: We try to use lief to extend the last section of the LOAD segment
+
+        print("\n\t Starting to extend Section...")
+
 
         file_to_be_patched = SectionExtender(binary_fname, 4096).extend_last_section_of_segment()
 
@@ -125,7 +145,7 @@ class Patching:
         self.new_memory_writing_address = new_memory_address + 2 * (self.patch_code_block_end.addr - self.patch_code_block_start.addr)
 
         # Jump to new Memory
-        print(start_address_of_patch)
+        print("\n\t " + str(start_address_of_patch))
         if self.code_block_start.thumb:
             start_address_of_patch = start_address_of_patch - 1
             patch = patch_start_address_of_patch - 1
@@ -151,7 +171,7 @@ class Patching:
             for instruction_patch in block_patch.capstone.insns:
 
                 # Implement the following to use Angr References
-
+                print("\n\t instruction patch: " + str(instruction_patch))
                 reference = self.get_references_from_instruction(instruction_patch, self.refs_patch, block_patch.thumb)
 
                 # Handling of possible References
@@ -181,8 +201,10 @@ class Patching:
 
 
         # Jump back to the original function since the patch is now integrated
-        self.fix_shifts_in_references(new_memory_address, shift_backend)
-        self.backend.save("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test_detoured")
+        if self.shifts_ascending:
+            self.fix_shifts_in_references(new_memory_address, shift_backend)
+
+        self.backend.save(self.patching_config.output_path)
 
 
 
@@ -284,7 +306,7 @@ class Patching:
         :param instruction:
         :param address:
         """
-        print(bytes(instruction.insn.bytes))
+        # print(bytes(instruction.insn.bytes))
         patches = RawMemPatch(address, bytes(instruction.insn.bytes))
         self.patches.append(patches)
         # self.backend.apply_patches(patches)
@@ -486,10 +508,16 @@ class Patching:
             else:
                 offset = 4
             target_address = old_reference.toAddr - 1 - self.writing_address - offset
+            new_string = instruction_patch.mnemonic
             if target_address > 0:
+                if ".w" not in new_string:
+                    new_string += ".w"
                 new_string = instruction_patch.mnemonic + ".w $+" + str(hex(target_address))
             else:
-                new_string = instruction_patch.mnemonic + ".w $" + str(hex(target_address))
+                if ".w" not in new_string:
+                    new_string += ".w"
+                new_string += " $" + str(hex(target_address))
+
             code = self.backend.compile_asm(new_string, base=self.writing_address-self.project_patch.loader.min_addr, is_thumb=True)
             patches = RawMemPatch(self.writing_address, code)
 
@@ -536,6 +564,9 @@ class Patching:
         # self.backend.apply_patches(patches)
 
     def reassemble_reference_at_different_address(self, instruction_patch, target_address, writing_address):
+        if target_address % 2 != 0:
+            target_address = target_address - 1
+
         if 'pc' in instruction_patch.op_str:
             target_address = target_address - writing_address
             new_string = self.replace_jump_target_address(instruction_patch, target_address)
@@ -591,7 +622,7 @@ class Patching:
             elif reference.fromAddr in matched_refs.match_from_new_address:
                 new_target = matched_refs.match_from_new_address[reference.fromAddr][0]
 
-            self.handle_read_offset(instruction_patch, reference, matches, new_target.toAddr)
+            self.handle_read_offset(instruction_patch, reference, matches, new_target)
             return
 
 
@@ -948,14 +979,15 @@ class Patching:
         # Calculate Address where the value of the PARAM reference need to be written
 
 
-        if new_target is None or (new_target < self.writing_address):
+        if new_target is None or (new_target.toAddr < self.writing_address):
             new_target = self.new_memory_writing_address
 
             data = self.load_data_from_memory(reference.toAddr)
             # Write the data to the new memory address
             patches = RawMemPatch(self.new_memory_writing_address, data)
             self.patches.append(patches)
-
+        else:
+            new_target = new_target.toAddr
 
 
 

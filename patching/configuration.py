@@ -4,7 +4,7 @@ import sqlite3
 
 class Config:
 
-    def __init__(self):
+    def __init__(self, path, section):
         """
         This class contains all the configuration parameters for the patching process
         :param functionName:     String
@@ -18,14 +18,15 @@ class Config:
         self.patch_path = None
         try:
             # Read the configuration file
-            config.read("config.properties")
+            config.read(path)
 
             # Get values from the configuration file
-            self.functionName = config.get("DEFAULT", "function.name")
+            self.functionName = config.get(section, "function.name")
             print("Hallo", self.functionName)
-            self.sql_path = config.get("DEFAULT", "SQL.path")
-            self.binary_path = config.get("DEFAULT", "binary.path")
-            self.patch_path = config.get("DEFAULT", "patch.path")
+            self.sql_path = config.get(section, "SQL.path")
+            self.binary_path = config.get(section, "binary.path")
+            self.patch_path = config.get(section, "patch.path")
+            self.output_path = config.get(section, "output.path")
         except configparser.Error as e:
             print("Error reading configuration:", e)
 
