@@ -21,18 +21,18 @@ logging.basicConfig(filename='error.log', level=logging.ERROR)
 
 
 
-i=1;
-while i <= 6:
+i=2;
+while i <=2:
     config = Config("magma-config.properties", str(i))
-    try:
-        patching = Patching(config)
-        patching.patch(config.binary_path)
-    except Exception as e:
-        print("Error occurred while patching:", e)
-        logging.error("An error occurred: %s %s %s", e, config.binary_path, config.functionName)
+    # try:
+    patching = Patching(config)
+    patching.patch(config.binary_path)
+    # except Exception as e:
+    #     print("Error occurred while patching:", e)
+    #     logging.error("An error occurred: %s %s %s", e, config.binary_path, config.functionName)
     #
         # Handle the error gracefully or continue to the next task
-        pass
+        # pass
     i+=1
 
 

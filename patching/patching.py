@@ -87,6 +87,7 @@ class Patching:
         # printf("\n\t WARNING LR NOT PUSHED TO STACK");
         # }
 
+
         print("\n\t Starting Patching Process...")
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
         perfect_matches = Matcher(self.cfge_vuln_specific, self.cfge_patch_specific, self.project_vuln, self.project_patch)
@@ -764,11 +765,11 @@ class Patching:
 
         data = b""
         while True:
-            byte_data = self.project_patch.loader.memory.load(address, 1)
-            if byte_data == b'\x00':
+            byte_data = self.project_patch.loader.memory.load(address, 2)
+            if byte_data == b'\x00\x00':
                 break
             data += byte_data
-            address += 1
+            address += 2
         return data
 
 
@@ -804,6 +805,13 @@ class Patching:
                 #     data = value.to_bytes(4, byteorder='little')
                 #     affected_registers.append((res, data))
                 #     self.new_def_registers.remove(res)
+        for (reg, data) in affected_registers:
+            indices = [i for i, t in enumerate(affected_registers) if t[0].register_name == reg.register_name]
+            if len(indices) >= 2:
+                # Find the index of the tuple with the lowest value in the second position
+                min_index = min(indices, key=lambda i: affected_registers[i][1])
+                # Remove the tuple with the lowest value in the second position
+                del affected_registers[min_index]
 
         return affected_registers
 
