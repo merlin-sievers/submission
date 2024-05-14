@@ -170,6 +170,10 @@ class Patching:
             self.is_thumb = block_patch.thumb
             # Going through every CodeUnit from the BasicBlock
             for instruction_patch in block_patch.capstone.insns:
+                # Check if the instruction is actually just data...
+                if self.new_def_registers:
+                    if instruction_patch.address >= self.new_def_registers[0].old_ldr_data_address:
+                        continue
 
                 # Implement the following to use Angr References
                 print("\n\t instruction patch: " + str(instruction_patch))
@@ -446,7 +450,7 @@ class Patching:
 
     def add_new_reference(self, instruction_patch, reference, matched_refs):
 
-        if self._reference_outside_of_patch(self.patch_code_block_start, self.patch_code_block_end, reference):
+        if self._reference_outside_of_patch(self.patch_code_block_start, self.patch_code_block_end, reference) or reference.refType == "read":
             self.rewriting_and_adding_reference_to_the_old_program(reference, instruction_patch, matched_refs)
         else:
             self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
