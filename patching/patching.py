@@ -69,7 +69,7 @@ class Patching:
         self.patches = []
 
         self.new_def_registers = []
-        self.used_registers = []
+        self.used_registers = dict()
 
         self.shifts_ascending = []
         self.shifts_descending = []
@@ -291,10 +291,12 @@ class Patching:
 
         # First check if from Address of Reference is perfectly matched
         if reference.fromAddr in matched_refs.match_from_new_address:
-            self.handle_matched_reference(reference, matched_refs.match_from_new_address[reference.fromAddr][0], instruction_patch, matched_refs)
+            old_reference = max(matched_refs.match_from_new_address[reference.fromAddr], key=lambda ref: ref.toAddr)
+            self.handle_matched_reference(reference, old_reference, instruction_patch, matched_refs)
         # Check if the To Address of the Reference is perfectly matched
         elif reference.toAddr in matched_refs.match_to_new_address:
-            self.handle_matched_reference(reference, matched_refs.match_to_new_address[reference.toAddr][0], instruction_patch, matched_refs)
+            old_reference = max(matched_refs.match_to_new_address[reference.toAddr], key=lambda ref: ref.toAddr)
+            self.handle_matched_reference(reference, old_reference, instruction_patch, matched_refs)
 
         # If the Reference is not perfectly matched
         else:
@@ -393,7 +395,7 @@ class Patching:
         if jump_target < self.writing_address:
             subtraction = True
             subtraction_address = reference.fromAddr
-        results = solver.solve(backward_slice.chosen_statements, jump_target, self.writing_address, variable.variable)
+        results = solver.solve(backward_slice.chosen_statements, jump_target, self.writing_address, variable.variable, self.used_registers)
 
 
 
@@ -718,9 +720,13 @@ class Patching:
 
 
         if variable is None:
-            self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
-            self.writing_address = self.writing_address + instruction_patch.size
-            return
+            max = 0
+            for definition in definitions:
+                if len(definition.dependents) > 0:
+                    if isinstance(definition._variable.variable, SimTemporaryVariable):
+                        if max < definition._variable.location.stmt_idx:
+                            max = definition._variable.location.stmt_idx
+                            variable = definition._variable
 
 
         solver = ConstraintSolver(self.project_patch, instruction_patch.address-1)
@@ -736,7 +742,7 @@ class Patching:
         if self.new_memory_data_address is None:
            self.new_memory_data_address = self.new_memory_writing_address + 100
 
-        results = solver.solve(backward_slice.chosen_statements, self.new_memory_writing_address, self.writing_address, variable.variable)
+        results = solver.solve(backward_slice.chosen_statements, self.new_memory_writing_address, self.writing_address, variable.variable, self.used_registers)
 
         if results is None:
             return
@@ -801,6 +807,7 @@ class Patching:
                             value = value
                         data = value.to_bytes(4, byteorder='little')
                         affected_registers.append((res, data))
+                        self.used_registers[result] = value
                         # self.new_def_registers.remove(res)
                 # offset = int(offset)
                 # reg_offset = self.project_patch.arch.get_register_offset(res.register_name)
@@ -808,14 +815,14 @@ class Patching:
                 #     value = int(str(value))
                 #     data = value.to_bytes(4, byteorder='little')
                 #     affected_registers.append((res, data))
-                #     self.new_def_registers.remove(res)
-        for (reg, data) in affected_registers:
-            indices = [i for i, t in enumerate(affected_registers) if t[0].register_name == reg.register_name]
-            if len(indices) >= 2:
-                # Find the index of the tuple with the lowest value in the second position
-                min_index = min(indices, key=lambda i: affected_registers[i][1])
-                # Remove the tuple with the lowest value in the second position
-                del affected_registers[min_index]
+        #         #     self.new_def_registers.remove(res)
+        # for (reg, data) in affected_registers:
+        #     indices = [i for i, t in enumerate(affected_registers) if t[0].register_name == reg.register_name]
+        #     if len(indices) >= 2:
+        #         # Find the index of the tuple with the lowest value in the second position
+        #         min_index = min(indices, key=lambda i: affected_registers[i][1])
+        #         # Remove the tuple with the lowest value in the second position
+        #         del affected_registers[min_index]
 
         return affected_registers
 
@@ -1010,7 +1017,7 @@ class Patching:
                                                  variable=variable, targets=location)
 
         results = solver.solve(backward_slice.chosen_statements, new_target, self.writing_address,
-                               variable.variable)
+                               variable.variable, self.used_registers)
 
         if results is None:
             return

@@ -21,7 +21,6 @@ class ConstraintSolver:
         self._vex_stmt_handlers = []
         self.__init_handlers()
 
-        self.subtraction = False
 
 
     def __init_handlers(self):
@@ -36,14 +35,14 @@ class ConstraintSolver:
         assert None not in self._vex_expr_handlers
         assert None not in self._vex_stmt_handlers
 
-    def solve(self, slice, jump_target, writing_address, variable, subtraction = False, subtraction_address=None):
+    def solve(self, slice, jump_target, writing_address, variable, written_registers):
         """
         Running the SMTSolver with the Slice of a Control Flow graph and the jump target
         :param slice: The slice of the Control Flow Graph
         :param jump_target: The jump target of the Control Flow Graph
         :param writing_address: The address where the jump instruction is written to
-        :param subtraction: If the jump target is a subtraction
-        :param subtraction_address: The address of the subtraction
+        :param variable: The variable that is used to jump to the target
+        :param written_registers: The registers that are used in the slice that already have an assigned value
         """
         results = []
         i = 0
@@ -61,9 +60,7 @@ class ConstraintSolver:
                     ins_addr = ins_addr - 1
 
                 statement = block.vex.statements[id]
-                if subtraction:
-                    if ins_addr == subtraction_address:
-                        self.subtraction = True
+
 
                 if self.handle_vex_statement(statement, ins_addr, writing_address):
                     # To debug solver we need to push the assertions
@@ -81,14 +78,32 @@ class ConstraintSolver:
             return None
 
         if isinstance(variable, SimTemporaryVariable):
-            register = z3.BitVec("t" + self.basic_block_ssa + str(variable.tmp_id), 32)
+
+            for k in range(i, -1, -1):
+                register = z3.BitVec("t" + str(k) + "b" + str(variable.tmp_id), 32)
+                if register in self.variables:
+                    break
         else:
-            register = z3.BitVec("r" + str(variable.reg), 32)
+            for k in range(i, -1, -1):
+                register = z3.BitVec("r" + str(k) + "b" + str(variable.reg), 32)
+                if register in self.variables:
+                    break
+                else:
+                    register = z3.BitVec("r" + str(variable.reg), 32)
+
         if len(self.used_registers) == 0:
             self.used_registers.append(register)
 
 
         self.solver.add(self.used_registers[0] == new_target)
+
+
+        # Add Constraints for already written values in the registers
+        for reg in written_registers:
+            var = z3.BitVec(str(reg), 32)
+            expr = z3.BitVecVal(written_registers[reg], 32)
+            self.solver.add(var == expr)
+
 
         if self.solver.check() == z3.sat:
         # Get the model
@@ -179,6 +194,7 @@ class ConstraintSolver:
         guard = self._handle_vex_expr(statement.guard, address, writing_address)
         tmp = z3.BitVec("t" + self.basic_block_ssa + str(statement.dst), 32)
         condition = z3.If(guard != 0, load, alt)
+        self.variables.append(tmp)
         self.solver.add(tmp == condition)
         return True
 
@@ -229,17 +245,13 @@ class ConstraintSolver:
     def _handle_vex_expr_Triop(self, expression, address, writing_address):
         pass
 
-    def _handle_vex_expr_Binop(self, expression, address, writing_address, subtraction = False):
+    def _handle_vex_expr_Binop(self, expression, address, writing_address):
         op1 = self._handle_vex_expr(expression.args[0], address, writing_address)
         self.variables.append(op1)
         op2 = self._handle_vex_expr(expression.args[1], address, writing_address)
         self.variables.append(op2)
         if expression.op == "Iop_Add32":
-            if self.subtraction:
-                expr = op2 - op1
-                self.subtraction = False
-            else:
-                expr = op1 + op2
+            expr = op1 + op2
             return expr
         if expression.op == "Iop_CmpNE32":
             expr = op1 - op2

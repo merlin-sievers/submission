@@ -52,7 +52,8 @@ class RefMatcher:
             if sec.name == ".got":
                 got_addr = sec.min_addr
 
-
+        help = [ref for ref in refs_patch if entryPoint <= ref <= end]
+        print(len(help))
         for ref_patch in [ref for ref in refs_patch if entryPoint <= ref <= end]:
             relevant_addrs = [addr for addr in perfect_matches.match_new_address if 0 <= (ref_patch - addr) <= 80]
             for addr in relevant_addrs:
@@ -61,68 +62,43 @@ class RefMatcher:
                     i = block_patch.instruction_addrs.index(ref_patch)
                     block_vuln = project_vuln.factory.block(perfect_matches.match_new_address[addr])
                     if block_vuln.instruction_addrs[i] in refs_vuln:
-                        self.match_from_new_address[ref_patch] = refs_vuln[block_vuln.instruction_addrs[i]]
-                        self.match_from_old_address[refs_vuln[block_vuln.instruction_addrs[i]][0].fromAddr] = refs_patch[ref_patch]
-                        self.match_to_new_address[refs_patch[ref_patch][0].toAddr] = refs_vuln[block_vuln.instruction_addrs[i]]
-                        self.match_to_old_address[refs_vuln[block_vuln.instruction_addrs[i]][0].toAddr] = refs_patch[ref_patch]
+                        self.match_from_new_address.setdefault(ref_patch, []).extend(refs_vuln[block_vuln.instruction_addrs[i]])
+                        self.match_from_old_address.setdefault(refs_vuln[block_vuln.instruction_addrs[i]][0].fromAddr, []).extend(refs_patch[ref_patch])
+
+                        for r in refs_patch[ref_patch]:
+                            for v in refs_vuln[block_vuln.instruction_addrs[i]]:
+                                if r.refType == v.refType:
+                                    self.match_to_new_address.setdefault(r.toAddr, []).append(v)
+                                    self.match_to_old_address.setdefault(v.toAddr, []).append(r)
+
+
+
             for ref in refs_patch[ref_patch]:
                 matching = [(t[0],t[1]) for t in self.bindiff_results.function_matches if ref.toAddr == t[1]]
                 #
+
+
                 if matching:
                     new_ref = Reference(ref.fromAddr, matching[0][0], ref.refType)
-                    self.match_to_old_address[matching[0][0]] = [ref]
-                    self.match_to_new_address[ref.toAddr] = [new_ref]
-                elif ref.toAddr >= got_addr:
+                    self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
+                    self.match_to_old_address.setdefault(matching[0][0], []).append(ref)
+                if ref.toAddr >= got_addr:
                     relocations_patch = [reloc for reloc in project_patch.loader.main_object.relocs if reloc.rebased_addr == ref.toAddr]
                     if relocations_patch:
                         relocations_vuln = [reloc for reloc in project_vuln.loader.main_object.relocs if reloc.symbol.name == relocations_patch[0].symbol.name]
                         if relocations_vuln:
                             new_ref = Reference(ref.fromAddr, relocations_vuln[0].rebased_addr, ref.refType)
-                            self.match_to_old_address[relocations_vuln[0].rebased_addr] = [ref]
-                            self.match_to_new_address[ref.toAddr] = [new_ref]
-                elif ref.toAddr in project_patch.loader.main_object.reverse_plt:
+                            self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
+                            self.match_to_old_address.setdefault(relocations_vuln[0].rebased_addr, []).append(ref)
+                if ref.toAddr in project_patch.loader.main_object.reverse_plt:
                     name = project_patch.loader.main_object.reverse_plt[ref.toAddr]
                     if name in project_vuln.loader.main_object.plt:
                         new_ref = Reference(ref.fromAddr, project_vuln.loader.main_object.plt[name], ref.refType)
-                        self.match_to_old_address[project_vuln.loader.main_object.plt[name]] = [ref]
-                        self.match_to_new_address[ref.toAddr] = [new_ref]
+                        self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
+                        self.match_to_old_address.setdefault(project_vuln.loader.main_object.plt[name], []).append(ref)
 
+        print(sum(len(lst) for lst in self.match_to_old_address.values()), sum(len(lst) for lst in self.match_to_new_address.values()), len(self.match_to_old_address), len(self.match_to_new_address), len(self.match_from_old_address), len(self.match_from_new_address))
 
-
-
-        # for ref_vuln in refs_vuln:
-        #         relevant_addrs = [addr for addr in perfect_matches.match_old_address if 0 <= (ref_vuln - addr ) <= 80]
-        #         for addr in relevant_addrs:
-        #             block_vuln = project_vuln.factory.block(addr)
-        #             if ref_vuln in block_vuln.instruction_addrs:
-        #                 i = block_vuln.instruction_addrs.index(ref_vuln)
-        #                 block_patch = project_patch.factory.block(perfect_matches.match_old_address[addr])
-        #                 if block_patch.instruction_addrs[i] in refs_patch:
-        #                     self.match_from_old_address[ref_vuln] = refs_patch[block_patch.instruction_addrs[i]]
-        #                     self.match_from_new_address[refs_patch[block_patch.instruction_addrs[i]][0].fromAddr] = refs_vuln[ref_vuln]
-        #                     self.match_to_old_address[refs_vuln[ref_vuln][0].toAddr] = refs_patch[block_patch.instruction_addrs[i]]
-        #                     self.match_to_new_address[refs_patch[block_patch.instruction_addrs[i]][0].toAddr] = refs_vuln[ref_vuln]
-        #             if refs_vuln[ref_vuln][0].toAddr in block_vuln.instruction_addrs:
-        #                 i = block_vuln.instruction_addrs.index(refs_vuln[ref_vuln][0].toAddr)
-        #                 block_patch = project_patch.factory.block(perfect_matches.match_old_address[addr])
-        #                 if block_patch.instruction_addrs[i] in refs_patch:
-        #                     self.match_to_old_address[refs_vuln[ref_vuln][0].toAddr] = refs_patch[block_patch.instruction_addrs[i]]
-        #                     self.match_to_new_address[refs_patch[block_patch.instruction_addrs[i]][0].toAddr] = refs_vuln[ref_vuln]
-        #
-        #         for function_addr, function_addr_patch  in self.bindiff_results.function_matches:
-        #             for ref in refs_vuln[ref_vuln]:
-        #                 if ref.toAddr == function_addr:
-        #                     new_ref = Reference(ref.fromAddr, function_addr_patch, ref.refType)
-        #                     self.match_to_old_address[ref.toAddr] = [new_ref]
-        #                     self.match_to_new_address[function_addr_patch] = [ref]
-        #
-        #             for ref_patch in refs_patch:
-        #                 for r in refs_patch[ref_patch]:
-        #                     if r.toAddr == function_addr_patch:
-        #                         new_ref = Reference(r.fromAddr, function_addr, r.refType)
-        #                         self.match_to_old_address[function_addr] = [r]
-        #                         self.match_to_new_address[r.toAddr] = [new_ref]
-        #
 
 
     def get_refs(self, project, cfg, address):
