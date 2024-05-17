@@ -82,7 +82,17 @@ class RefMatcher:
                     new_ref = Reference(ref.fromAddr, matching[0][0], ref.refType)
                     self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
                     self.match_to_old_address.setdefault(matching[0][0], []).append(ref)
-                if ref.toAddr >= got_addr:
+
+                if ref.toAddr == got_addr:
+                    for sec in project_vuln.loader.main_object.sections:
+                        if sec.name == ".got":
+                            got_addr_vuln = sec.min_addr
+                    new_ref = Reference(ref.fromAddr, got_addr_vuln, ref.refType)
+                    self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
+                    self.match_to_old_address.setdefault(got_addr_vuln, []).append(ref)
+
+                if ref.toAddr > got_addr:
+
                     relocations_patch = [reloc for reloc in project_patch.loader.main_object.relocs if reloc.rebased_addr == ref.toAddr]
                     if relocations_patch:
                         relocations_vuln = [reloc for reloc in project_vuln.loader.main_object.relocs if reloc.symbol.name == relocations_patch[0].symbol.name]
