@@ -1,4 +1,4 @@
-prefix=/home/jaenich/Magma/magma/targets/libpng/libpng/repo//PNG006/fixed
+prefix=/home/jaenich/Magma/magma/targets/libpng/libpng/repo/PNG006/fixed
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include/libpng16

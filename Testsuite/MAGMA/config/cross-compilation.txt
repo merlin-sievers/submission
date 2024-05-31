@@ -1,0 +1,30 @@
+# Compile the AFLDRIVER
+In aflplusplus/repo/utils/aflpp_driver/
+
+		/usr/lib/llvm-14/bin/clang --target=arm-linux-gnueabihf -O3 -funroll-loops -g -fPIC -O0 -funroll-loops -c aflpp_qemu_driver.c
+		arm-linux-gnueabihf-ar ru libAFLQemuDriver.a aflpp_qemu_driver.o
+
+# Compile the LIBPNG Harnes
+in libpng/repo/contrib/oss-fuzz
+		/usr/lib/llvm-14/bin/clang++ -v -I. -std=c++11 --target=arm-linux-gnueabihf -I/usr/arm-linux-gnueabihf/include/c++/11/ contrib/oss-fuzz/libpng_read_fuzzer.cc -o libpng_read_fuzzer PNG003/fixed/lib/libpng16.so.16.38.0 /usr/local/lib/zlib/lib/libz.so.1.3.1 /home/jaenich/Tools/AFLplusplus/utils/aflpp_driver/libAFLQemuDriver.a
+
+#Compile libpng correctly see scripts.
+
+#Run libpng harness:
+	AFL_QEMU_DRIVER_NO_HOOK=1 QEMU_LD_PREFIX=/usr/arm-linux-gnueabihf  LD_LIBRARY_PATH=/home/jaenich/Magma/magma/targets/libpng/libpng/repo/PNG003/vuln/lib/:/usr/local/lib/zlib/lib/ qemu-arm ./libpng_read_fuzzer < /home/jaenich/FuzzingInput/aflplusplus_libpng_libpng_read_fuzzer_AAH003.UMn
+
+#Run Fuzzer (still buggy no input is given):
+
+	AFL_QEMU_PERSISTENT_ADDR=0x400012d8 AFL_QEMU_PERSISTENT_HOOK=/home/jaenich/Tools/AFLplusplus/utils/aflpp_driver/aflpp_qemu_driver_hook.so AFL_DEBUG=1 QEMU_LD_PREFIX=/usr/arm-linux-gnueabihf/ LD_LIBRARY_PATH=/home/jaenich/Magma/magma/targets/libpng/libpng/repo/PNG003/vuln/lib/:/usr/local/lib/zlib/lib/ ./afl-fuzz -m none  -Q -i /home/jaenich/Magma/magma/targets/libpng/corpus/libpng_read_fuzzer/ -o /home/jaenich/FuzzingOutput/fuzzvuln351 -- /home/jaenich/Magma/magma/targets/libpng/libpng/repo/libpng_read_fuzzer
+
+#Compile the LIBTIFF Harness
+
+/usr/lib/llvm-14/bin/clang++ -v -I./include -std=c++11 --target=arm-linux-gnueabihf -I/usr/arm-linux-gnueabihf/include/c++/11/ ../src/tiff_read_rgba_fuzzer.cc -o tiff_read_rgba_fuzzer TIF001/fixed/lib/libtiffxx.a TIF001/fixed/lib/libtiff.so.5.7.0 /usr/local/lib/zlib/lib/libz.so.1.3.1 /home/jaenich/Tools/AFLplusplus/utils/aflpp_driver/libAFLQemuDriver.a /home/jaenich/Libraries/jbigkit-2.1/libjbig/libjbig.a  /home/jaenich/Libraries/lib/liblzma.so.5.2.4
+		
+#Compile Libtiff
+ ./configure --host=arm-linux-gnueabihf CC=arm-linux-gnueabihf-gcc AR=arm-linux-gnueabihf-ar RANLIB=arm-linux-gnueabihf-ranlib CFLAGS='--include /home/jaenich/Magma/magma/magma/src/canary_lar.h -I/home/jaenich/Libraries/include/ -I/home/jaenich/Libraries/libjep-turbo-2.0.3/ -DMAGMA_ENABLE_CANARIES -g -O2' LIBS='-lm -l:libz.so -l:liblzma.so -l:magma.o' LDFLAGS='-L/home/jaenich/Magma/magma/magma/src/ -L/home/jaenich/Libraries/lib -L/usr/local/lib/zlib/lib'  --prefix="/home/jaenich/Magma/targets/libtiff/vuln" --enable-shared
+
+#RUN libtiff harness:
+
+AFL_QEMU_DRIVER_NO_HOOK=1 QEMU_LD_PREFIX=/usr/arm-linux-gnueabihf  LD_LIBRARY_PATH=/home/jaenich/Magma/targets/libtiff/vuln/lib/:/usfixed/lib/:/usr/local/lib/zlib/lib/:/home/jaenich/Libraries/lib/ qemu-arm ./tiff_read_rgba_fuzzer < /home/jaenich/Magma/Patched/TIF001/aflplusplus_libtiff_tiff_read_rgba_fuzzer_AAH009.ZGr
+

@@ -38,4 +38,4 @@ dlopen=''
 dlpreopen=''
 
 # Directory that this library needs to be installed in:
-libdir='/home/jaenich/Magma/magma/targets/libpng/libpng/repo//PNG002/fixed/lib'
+libdir='/home/jaenich/Magma/magma/targets/libpng/libpng/repo/PNG002/fixed/lib'

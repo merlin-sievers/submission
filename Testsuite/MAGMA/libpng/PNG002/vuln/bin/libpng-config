@@ -12,12 +12,12 @@
 # Modeled after libxml-config.
 
 version="1.6.38.git"
-prefix="/home/jaenich/Magma/magma/targets/libpng/libpng/repo//PNG002/vuln"
+prefix="/home/jaenich/Magma/magma/targets/libpng/libpng/repo/PNG002/vuln"
 exec_prefix="${prefix}"
 libdir="${exec_prefix}/lib"
 includedir="${prefix}/include/libpng16"
 libs="-lpng16"
-all_libs="-lpng16 -lm -lz -lm "
+all_libs="-lpng16 -lm -lz -lm -l:magma.o"
 I_opts="-I${includedir}"
 L_opts="-L${libdir}"
 R_opts=""
