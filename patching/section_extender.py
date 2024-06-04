@@ -23,7 +23,10 @@ class SectionExtender:
             elif section.name == ".rel.dyn":
                 reldyn_sec = section
 
-        if binary.segments[1].virtual_address - binary.segments[0].virtual_address < self.additional_size:
+
+        index = list(binary.segments).index(segment)
+
+        if binary.segments[index + 1].virtual_address - binary.segments[index].virtual_address < self.additional_size:
             print("Load segment and data segment are too close to each other. Cannot extend.")
             return
         # Extend the section
@@ -37,21 +40,21 @@ class SectionExtender:
         binary.extend(segment, self.additional_size)
 
         # # TODO: Add check that segment can be extended
-        if binary.segments[1].virtual_address - binary.segments[0].virtual_address < self.additional_size:
+        if binary.segments[index + 1].virtual_address - binary.segments[index].virtual_address < self.additional_size:
             print("Load segment and data segment are too close to each other. Cannot extend.")
-            return
+            # return
         i = 0
-        while  i < len(binary.segments[0].sections):
-            binary.segments[0].sections[i].content = binary_1.segments[0].sections[i].content
+        while  i < len(binary.segments[index].sections):
+            binary.segments[index].sections[i].content = binary_1.segments[index].sections[i].content
             i += 1
 
         i = 0
-        while i < len(binary.segments[1].sections):
-            binary.segments[1].sections[i].content = binary_1.segments[1].sections[i].content
+        while i < len(binary.segments[index+1].sections):
+            binary.segments[index+1].sections[i].content = binary_1.segments[index+1].sections[i].content
             i += 1
 
         while i < len(binary.segments[2].sections):
-            binary.segments[2].sections[i].content = binary_1.segments[2].sections[i].content
+            binary.segments[index+2].sections[i].content = binary_1.segments[index+2].sections[i].content
             i += 1
 
 
@@ -60,18 +63,21 @@ class SectionExtender:
         for seg in binary.segments:
             seg1 = seg
 
+        seg1 = binary.segments[0]
+        seg2 = binary.segments[1]
+
         segment = next((seg for seg in binary.segments if seg.type ==lief.ELF.SEGMENT_TYPES.GNU_RELRO), None)
         segment.virtual_address = segment.virtual_address - self.additional_size
         segment.physical_address = segment.physical_address - self.additional_size
 
-        binary.segments[1].virtual_address = binary.segments[1].virtual_address - self.additional_size
-        binary.segments[1].alignment = binary.segments[1].alignment = 4096
-        binary.segments[1].physical_address = binary.segments[1].physical_address - self.additional_size
-        for s in binary.segments[1].sections:
+        binary.segments[index + 1].virtual_address = binary.segments[index + 1].virtual_address - self.additional_size
+        binary.segments[index + 1].alignment = binary.segments[index + 1].alignment = 4096
+        binary.segments[index + 1].physical_address = binary.segments[index + 1].physical_address - self.additional_size
+        for s in binary.segments[index + 1].sections:
             s.virtual_address = s.virtual_address - self.additional_size
 
-        binary.segments[2].virtual_address = binary.segments[2].virtual_address - self.additional_size
-        binary.segments[2].physical_address = binary.segments[2].physical_address - self.additional_size
+        binary.segments[index + 2].virtual_address = binary.segments[index + 2].virtual_address - self.additional_size
+        binary.segments[index + 2].physical_address = binary.segments[index + 2].physical_address - self.additional_size
         # for s in binary.segments[2].sections:
         #     s.virtual_address = s.virtual_address - self.additional_size
 

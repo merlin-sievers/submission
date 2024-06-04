@@ -40,6 +40,9 @@ class Patching:
         print("\n\t Starting to analyze the vulnerable Program CFGFast...")
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
 
+        if self.project_vuln.loader.find_symbol(self.patching_config.functionName) is None:
+            print(patching_config.functionName + " not found in binary")
+            return
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
         # TODO: Find a better option to get the end
         self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size
@@ -322,7 +325,7 @@ class Patching:
 
         # Tracking Register for later backward slicing and static analysis
 
-        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr))')
+        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+))')
 
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction_patch.op_str)
@@ -616,7 +619,7 @@ class Patching:
         # if offset is not None:
         #     reference = offset
 
-        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr))')
+        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+))')
 
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction_patch.op_str)
@@ -636,6 +639,7 @@ class Patching:
 
 
         # Extract the first match (assuming there is at least one match)
+
         register_name = matches[0]
 
         if self.is_thumb:
@@ -1055,7 +1059,7 @@ class Patching:
 
     @staticmethod
     def get_register_from_instruction(instruction, arch):
-        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr))')
+        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+))')
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction.op_str)
         # Extract the first match (assuming there is at least one match)
