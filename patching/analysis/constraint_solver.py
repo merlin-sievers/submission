@@ -50,7 +50,14 @@ class ConstraintSolver:
         self.variable = variable
         # Iterating over the instruction addresses in the slice
         for address, ids in sorted(slice.items()):
-            block = self.project.factory.block(address)
+            block = self.project.factory.block(address, size=75)
+            block.pp()
+            print("Address", hex(address))
+            # nodes = self.project.kb.cfgs.cfgs["CFGEmulated"].get_all_nodes(address)
+            # largest_node = max(nodes, key=lambda node: node.size)
+            # block = largest_node.block
+
+
             self.basic_block_ssa = str(i) + "b"
             i = i+1
             # Now iterate over the vex statements of the instruction
@@ -58,9 +65,12 @@ class ConstraintSolver:
 
                 if block.thumb:
                     ins_addr = ins_addr - 1
-
-                statement = block.vex.statements[id]
-
+            #TODO BAD HACK CHANGE IT!!!
+                if(len(block.vex.statements) > id):
+                    statement = block.vex.statements[id]
+                else:
+                    print("it happened again")
+                    continue
 
                 if self.handle_vex_statement(statement, ins_addr, writing_address):
                     # To debug solver we need to push the assertions

@@ -180,8 +180,6 @@ class VariableBackwardSlicing(BackwardSlice):
 
 
 
-
-
     def _worklist(self, starts, var):
         """
         :param self:

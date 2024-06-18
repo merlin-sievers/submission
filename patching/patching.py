@@ -36,7 +36,7 @@ class Patching:
         self.writing_address = None
         # TODO: Add path to the binary as an argument for the configuration
         self.project_vuln = angr.Project(self.patching_config.binary_path, auto_load_libs= False)
-        # self.project_vuln = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/vuln_test_3", auto_load_libs= False)
+
         print("\n\t Starting to analyze the vulnerable Program CFGFast...")
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
 
@@ -48,10 +48,17 @@ class Patching:
         self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size
         print("\n\t Starting to analyze the vulnerable Program CFGEmul...")
 
-        #TODO: Check if the context_sensitivity_level is correct
-        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[self.entry_point_vuln])
+        option = angr.sim_options.refs
+        # option = angr.sim_options.resilience
+        # option = angr.sim_options.modes["fastpath"]
+        # option.add(angr.sim_options.FAST_MEMORY)
+        # option.add(angr.sim_options.FAST_REGISTERS)
 
-        self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs = False)
+
+        #TODO: Check if the context_sensitivity_level is correct
+        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_vuln], max_steps=40)
+
+        self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs=False)
         # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
 
         print("\n\t Starting to analyze the patch Program CFGFast...")
@@ -59,8 +66,10 @@ class Patching:
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
         self.end_patch = self.entry_point_patch + self.project_patch.loader.find_symbol(self.patching_config.functionName).size
 
+
         print("\n\t Starting to analyze the patch Program CFGEmul...")
-        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[self.entry_point_patch])
+        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_patch], max_steps=40)
+
 
         print("\n\t Starting to analyze the patch Program DDG...")
         self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
@@ -68,7 +77,7 @@ class Patching:
         self.cdg_patch_specific = None
 
 
-        self.refs_patch= None
+        self.refs_patch = None
         self.patches = []
 
         self.new_def_registers = []
@@ -95,6 +104,7 @@ class Patching:
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
         perfect_matches = Matcher(self.cfge_vuln_specific, self.cfge_patch_specific, self.project_vuln, self.project_patch)
 
+        print("\n\t Getting References...")
         # Getting all References from both the vulnerable Program and the patch Program
         matched_refs = RefMatcher(bindiff_results=perfect_matches.bindiff_results)
         refs_vuln = matched_refs.get_refs(self.project_vuln, self.cfge_vuln_specific, self.entry_point_vuln)
@@ -132,18 +142,12 @@ class Patching:
 
         print("\n\t Starting to extend Section...")
 
-
         file_to_be_patched = SectionExtender(binary_fname, 4096).extend_last_section_of_segment()
 
         # file_to_be_patched = SectionExtender(binary_fname, 1024).add_section()
 
-
         self.backend = DetourBackend(file_to_be_patched)
         new_memory_address = self.project_vuln.loader.main_object.segments[0].vaddr + self.project_vuln.loader.main_object.segments[0].memsize
-
-
-
-
 
         # Estimate size of patch to find space for newly added references and data
         self.new_memory_writing_address = new_memory_address + 2 * (self.patch_code_block_end.addr - self.patch_code_block_start.addr)
@@ -159,7 +163,6 @@ class Patching:
         self.jump_to_new_memory(start_address_of_patch, new_memory_address, patch_start_address_of_patch)
         # TODO: Check and update for thumb and not thumb
         new_memory_address = new_memory_address + 2
-
 
         self.cfg_patch.get_any_node(patch_start_address_of_patch)
 
@@ -213,20 +216,6 @@ class Patching:
             self.fix_shifts_in_references(new_memory_address, shift_backend)
 
         self.backend.save(self.patching_config.output_path)
-
-
-
-    #                 test[0] = (byte) 0x00
-    #                 test[1] = (byte) 0xbf
-    #
-    #             asmVuln.patchProgram(test, next)
-    #             Disassembler disasm = Disassembler.getDisassembler(vulnerableProgram, monitor, null)
-    #
-    #
-    #             next = next.add(2)
-    #
-    #             clearListing(next, next.add(4))
-    #             asmVuln.assemble(next, "bl 0x" + codeBlockEnde.getMaxAddress().next())
 
 
     def jump_to_new_memory(self, base_address, target_address, patch_start_address_of_patch):
@@ -325,7 +314,7 @@ class Patching:
 
         # Tracking Register for later backward slicing and static analysis
 
-        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+))')
+        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+|d[0-9]+))')
 
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction_patch.op_str)
@@ -381,6 +370,10 @@ class Patching:
                         if max < definition._variable.location.stmt_idx:
                             max = definition._variable.location.stmt_idx
                             variable = definition._variable
+
+        if variable is None:
+            self.handle_reference_without_ddg(instruction_patch, reference)
+            return
 
 
         solver = ConstraintSolver(self.project_patch, instruction_patch.address -1)
@@ -528,7 +521,14 @@ class Patching:
                     new_string += ".w"
                 new_string += " $" + str(hex(target_address))
 
-            code = self.backend.compile_asm(new_string, base=self.writing_address-self.project_patch.loader.min_addr, is_thumb=True)
+
+            base = self.writing_address - self.project_patch.loader.min_addr
+            if base >= 850000:
+                base = 0
+            code = self.backend.compile_asm(new_string, base=base, is_thumb=True)
+
+
+
             patches = RawMemPatch(self.writing_address, code)
 
         else:
@@ -619,7 +619,7 @@ class Patching:
         # if offset is not None:
         #     reference = offset
 
-        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+))')
+        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+|d[0-9]+))')
 
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction_patch.op_str)
@@ -731,7 +731,21 @@ class Patching:
                         if max < definition._variable.location.stmt_idx:
                             max = definition._variable.location.stmt_idx
                             variable = definition._variable
+        if variable is None:
+            self.handle_reference_without_ddg(instruction_patch, reference)
+            return
 
+
+
+
+
+
+
+        #TODO JUST A HACK TO MAKE IT GO THROUGH
+        # if variable is None:
+        #     self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+        #     self.writing_address = self.writing_address + instruction_patch.size
+        #     return
 
         solver = ConstraintSolver(self.project_patch, instruction_patch.address-1)
 
@@ -993,6 +1007,12 @@ class Patching:
                             max = definition._variable.location.stmt_idx
                             variable = definition._variable
 
+        # TODO: CHECK LOGIC
+        if variable is None:
+            self.handle_reference_without_ddg(instruction_patch, reference)
+            return
+
+
 
         if self.is_thumb:
             thumb = 1
@@ -1041,6 +1061,82 @@ class Patching:
         self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
         self.writing_address = self.writing_address + instruction_patch.size
 
+
+
+    def handle_reference_without_ddg(self, instruction_patch, reference):
+
+        nodes = self.cfg_patch.get_all_nodes(instruction_patch.address, anyaddr=True)
+        largest_node = max(nodes, key=lambda node: node.size)
+        block = largest_node.block
+
+        cfge_help = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[block.address], max_steps=10)
+        ddge_help =  self.project_patch.analyses.DDG(cfg=cfge_help, start=block.address)
+
+        instr_view = ddge_help.view[instruction_patch.address]
+        definitions: list = instr_view.definitions
+        variable = None
+        location = None
+        register = self.get_register_from_instruction(instruction_patch, self.project_patch.arch)
+        for definition in definitions:
+            #     Now only take the register variable
+            if isinstance(definition._variable.variable, SimRegisterVariable):
+                if (definition._variable.variable.reg == register):
+                    variable = definition._variable
+                    location = [definition._variable.location]
+
+        if variable is None:
+            max = 0
+            for definition in definitions:
+                if len(definition.dependents) > 0:
+                    if isinstance(definition._variable.variable, SimTemporaryVariable):
+                        if max < definition._variable.location.stmt_idx:
+                            max = definition._variable.location.stmt_idx
+                            variable = definition._variable
+
+        solver = ConstraintSolver(self.project_patch, instruction_patch.address - 1)
+
+        backward_slice = VariableBackwardSlicing(cfg=cfge_help,
+                                                 ddg=ddge_help,
+                                                 cdg=self.cdg_patch_specific,
+                                                 project=self.project_patch,
+                                                 variable=variable, targets=location)
+
+        # Check what we want here. We could extend the .data .rodata section maybe?? Or just put it at a very far way address in the already extended section
+        if self.new_memory_data_address is None:
+            self.new_memory_data_address = self.new_memory_writing_address + 100
+
+        results = solver.solve(backward_slice.chosen_statements, self.new_memory_writing_address, self.writing_address,
+                               variable.variable, self.used_registers)
+
+        if results is None:
+            return
+
+        # TODO: What if there is a register in results that is not in the new_def_registers list?  Then there is no information of where to put the data
+        # Get all affected registers, i.e. intersection of new_def_registers and results
+        affected_registers = self.get_affected_registers(results)
+
+        for (register, data) in affected_registers:
+            # Write the data to the ldr_data_address
+            patches = RawMemPatch(register.ldr_data_address, data)
+            self.patches.append(patches)
+            # self.backend.apply_patches(patches)
+            data = self.load_data_from_memory(reference.toAddr)
+
+            # Write the data to the new memory address
+
+            patches = RawMemPatch(self.new_memory_writing_address, data)
+            self.patches.append(patches)
+            # self.backend.apply_patches(patches)
+            alignment = (self.new_memory_writing_address + len(data) + 4) % 4
+            self.new_memory_writing_address = self.new_memory_writing_address + len(data) + 4 + alignment
+
+        self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+        self.writing_address = self.writing_address + instruction_patch.size
+
+
+
+
+
     # Static methods
     @staticmethod
     def _reference_outside_of_patch(block_start, block_end, old_reference):
@@ -1059,10 +1155,11 @@ class Patching:
 
     @staticmethod
     def get_register_from_instruction(instruction, arch):
-        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+))')
+        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+|d[0-9]+))')
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction.op_str)
         # Extract the first match (assuming there is at least one match)
         register_name = matches[0]
         reg = arch.get_register_offset(register_name)
         return reg
+
