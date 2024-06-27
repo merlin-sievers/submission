@@ -176,12 +176,14 @@ class ConstraintSolver:
             register_new = z3.BitVec("r" + self.basic_block_ssa + str(statement.offset), 32)
             self.register_ssa[register].append(register_new)
             register = register_new
+
         else:
             self.register_ssa[register] = [register]
 
         if address == self.start_address:
-            if statement.offset == self.variable.reg:
-                self.used_registers.append(register)
+            if self.variable is not SimTemporaryVariable:
+                if statement.offset == self.variable.reg:
+                    self.used_registers.append(register)
 
         self.variables.append(register)
         expression = self._handle_vex_expr(statement.data, address, writing_address)

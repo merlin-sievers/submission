@@ -27,9 +27,7 @@ class Patching:
         self.patch_code_block_start = None
         self.code_block_start = None
         self.code_block_end = None
-
         self.is_thumb = False
-
 
         self.patching_config = patching_config
         self.backend = None
@@ -39,6 +37,7 @@ class Patching:
 
         print("\n\t Starting to analyze the vulnerable Program CFGFast...")
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
+
 
         if self.project_vuln.loader.find_symbol(self.patching_config.functionName) is None:
             print(patching_config.functionName + " not found in binary")
@@ -56,7 +55,7 @@ class Patching:
 
 
         #TODO: Check if the context_sensitivity_level is correct
-        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_vuln], max_steps=40)
+        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_vuln], max_steps=20)
 
         self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs=False)
         # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
@@ -67,8 +66,9 @@ class Patching:
         self.end_patch = self.entry_point_patch + self.project_patch.loader.find_symbol(self.patching_config.functionName).size
 
 
+
         print("\n\t Starting to analyze the patch Program CFGEmul...")
-        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_patch], max_steps=40)
+        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_patch], max_steps=20)
 
 
         print("\n\t Starting to analyze the patch Program DDG...")
@@ -93,12 +93,12 @@ class Patching:
         :return:
         """
 
+
         # TODO: Translate to python WARNING: Before beginning with patch check if lr has been pushed to the stack
         # if (!(vulnerableProgram.getListing().getCodeUnitAt(entryPoint_vuln).toString().contains(
         #         "push") & & vulnerableProgram.getListing().getCodeUnitAt(entryPoint_vuln).toString().contains("lr"))) {
         # printf("\n\t WARNING LR NOT PUSHED TO STACK");
         # }
-
 
         print("\n\t Starting Patching Process...")
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
@@ -142,7 +142,7 @@ class Patching:
 
         print("\n\t Starting to extend Section...")
 
-        file_to_be_patched = SectionExtender(binary_fname, 4096).extend_last_section_of_segment()
+        file_to_be_patched = SectionExtender(binary_fname, 65536).extend_last_section_of_segment()
 
         # file_to_be_patched = SectionExtender(binary_fname, 1024).add_section()
 
@@ -153,7 +153,7 @@ class Patching:
         self.new_memory_writing_address = new_memory_address + 2 * (self.patch_code_block_end.addr - self.patch_code_block_start.addr)
 
         # Jump to new Memory
-        print("\n\t " + str(start_address_of_patch))
+        print("\n\t " + str(start_address_of_patch), self.patch_code_block_end.addr - self.patch_code_block_start.addr)
         if self.code_block_start.thumb:
             start_address_of_patch = start_address_of_patch - 1
             patch = patch_start_address_of_patch - 1
@@ -177,10 +177,12 @@ class Patching:
             # Going through every CodeUnit from the BasicBlock
             for instruction_patch in block_patch.capstone.insns:
                 # Check if the instruction is actually just data...
-                if self.new_def_registers:
-                    if instruction_patch.address >= self.new_def_registers[0].old_ldr_data_address:
-                        continue
-
+                # if self.new_def_registers:
+                #     if instruction_patch.address >= self.new_def_registers[0].old_ldr_data_address:
+                #         continue
+                # if self.new_memory_writing_address >= new_memory_address + 65536:
+                #     print(self.writing_address, self.new_memory_writing_address, new_memory_address)
+                #     return 1
                 # Implement the following to use Angr References
                 print("\n\t instruction patch: " + str(instruction_patch))
                 reference = self.get_references_from_instruction(instruction_patch, self.refs_patch, block_patch.thumb)
@@ -193,6 +195,21 @@ class Patching:
                     self.writing_address = self.writing_address + instruction_patch.size
 
             patch_block_start_address = patch_block_start_address + block_patch.size
+            while patch_block_start_address-1 in self.cfg_patch.memory_data:
+                print("Data Address", patch_block_start_address)
+                byte_data = self.project_patch.loader.memory.load(patch_block_start_address-1, self.cfg_patch.memory_data[patch_block_start_address-1].size)
+                patches = RawMemPatch(self.writing_address, byte_data)
+                self.patches.append(patches)
+                self.writing_address = self.writing_address + self.cfg_patch.memory_data[patch_block_start_address-1].size
+                if self.cfg_patch.memory_data[patch_block_start_address-1].size < 1:
+                    break
+
+                patch_block_start_address = patch_block_start_address + self.cfg_patch.memory_data[patch_block_start_address-1].size
+
+
+
+
+
 
         #    Set the End for the last ShiftZone
         if self.shifts_ascending:
@@ -216,6 +233,7 @@ class Patching:
             self.fix_shifts_in_references(new_memory_address, shift_backend)
 
         self.backend.save(self.patching_config.output_path)
+
 
 
     def jump_to_new_memory(self, base_address, target_address, patch_start_address_of_patch):
@@ -363,12 +381,12 @@ class Patching:
                     location = [definition._variable.location]
 
         if variable is None:
-            max = 0
+            maximum = 0
             for definition in definitions:
                 if len(definition.dependents) > 0:
                     if isinstance(definition._variable.variable, SimTemporaryVariable):
-                        if max < definition._variable.location.stmt_idx:
-                            max = definition._variable.location.stmt_idx
+                        if maximum < definition._variable.location.stmt_idx:
+                            maximum = definition._variable.location.stmt_idx
                             variable = definition._variable
 
         if variable is None:
@@ -724,12 +742,12 @@ class Patching:
 
 
         if variable is None:
-            max = 0
+            maximum = 0
             for definition in definitions:
                 if len(definition.dependents) > 0:
                     if isinstance(definition._variable.variable, SimTemporaryVariable):
-                        if max < definition._variable.location.stmt_idx:
-                            max = definition._variable.location.stmt_idx
+                        if maximum < definition._variable.location.stmt_idx:
+                            maximum = definition._variable.location.stmt_idx
                             variable = definition._variable
         if variable is None:
             self.handle_reference_without_ddg(instruction_patch, reference)
@@ -999,12 +1017,12 @@ class Patching:
                     location = [definition._variable.location]
 
         if variable is None:
-            max = 0
+            maximum = 0
             for definition in definitions:
                 if len(definition.dependents) > 0:
                     if isinstance(definition._variable.variable, SimTemporaryVariable):
-                        if max < definition._variable.location.stmt_idx:
-                            max = definition._variable.location.stmt_idx
+                        if maximum < definition._variable.location.stmt_idx:
+                            maximum = definition._variable.location.stmt_idx
                             variable = definition._variable
 
         # TODO: CHECK LOGIC
@@ -1069,8 +1087,8 @@ class Patching:
         largest_node = max(nodes, key=lambda node: node.size)
         block = largest_node.block
 
-        cfge_help = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[block.address], max_steps=10)
-        ddge_help =  self.project_patch.analyses.DDG(cfg=cfge_help, start=block.address)
+        cfge_help = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[block.addr], max_steps=20)
+        ddge_help = self.project_patch.analyses.DDG(cfg=cfge_help, start=block.addr)
 
         instr_view = ddge_help.view[instruction_patch.address]
         definitions: list = instr_view.definitions
@@ -1085,12 +1103,12 @@ class Patching:
                     location = [definition._variable.location]
 
         if variable is None:
-            max = 0
+            maximum = 0
             for definition in definitions:
                 if len(definition.dependents) > 0:
                     if isinstance(definition._variable.variable, SimTemporaryVariable):
-                        if max < definition._variable.location.stmt_idx:
-                            max = definition._variable.location.stmt_idx
+                        if maximum < definition._variable.location.stmt_idx:
+                            maximum = definition._variable.location.stmt_idx
                             variable = definition._variable
 
         solver = ConstraintSolver(self.project_patch, instruction_patch.address - 1)
