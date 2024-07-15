@@ -17,9 +17,16 @@ from patching.reference import TrackingRegister, Reference
 from patching.section_extender import SectionExtender
 from patching.shifts import Shift
 
+import time
+
 
 class Patching:
     def __init__(self, patching_config):
+        # Start the timer
+        start_time = time.time()
+
+
+        # End the timer
 
         self.new_memory_data_address = None
         self.new_memory_writing_address = None
@@ -55,7 +62,7 @@ class Patching:
 
 
         #TODO: Check if the context_sensitivity_level is correct
-        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_vuln], max_steps=20)
+        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_vuln], max_steps=40)
 
         self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs=False)
         # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
@@ -68,13 +75,24 @@ class Patching:
 
 
         print("\n\t Starting to analyze the patch Program CFGEmul...")
-        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_patch], max_steps=20)
+        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_patch], max_steps=40)
 
 
         print("\n\t Starting to analyze the patch Program DDG...")
         self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
         # self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
         self.cdg_patch_specific = None
+
+        end_time = time.time()
+
+        # Calculate the elapsed time
+        elapsed_time = end_time - start_time
+
+        with open('time.txt', 'a') as error_file:
+            error_message = f"functionName: {self.patching_config.functionName} Elapsed time Analysis: {elapsed_time:.4f} seconds"
+            error_file.write(error_message + '\n')
+
+
 
 
         self.refs_patch = None
@@ -92,7 +110,7 @@ class Patching:
         :param binary_fname: path to the binary to be patched
         :return:
         """
-
+        start_time = time.time()
 
         # TODO: Translate to python WARNING: Before beginning with patch check if lr has been pushed to the stack
         # if (!(vulnerableProgram.getListing().getCodeUnitAt(entryPoint_vuln).toString().contains(
@@ -135,6 +153,15 @@ class Patching:
         self.patch_code_block_start = self.project_patch.factory.block(patch_start_address_of_patch)
         self.patch_code_block_end = self.project_patch.factory.block(max(patch_blocks))
 
+        end_time = time.time()
+
+        # Calculate the elapsed time
+        elapsed_time = end_time - start_time
+
+        with open('time.txt', 'a') as error_file:
+            error_message = f"functionName: {self.patching_config.functionName} Elapsed time Matching: {elapsed_time:.4f} seconds"
+            error_file.write(error_message + '\n')
+
         # Start of the actual patching:
 
         # Create a new memory section to write the patch into
@@ -142,7 +169,7 @@ class Patching:
 
         print("\n\t Starting to extend Section...")
 
-        file_to_be_patched = SectionExtender(binary_fname, 65536).extend_last_section_of_segment()
+        file_to_be_patched = SectionExtender(binary_fname, 4096).extend_last_section_of_segment()
 
         # file_to_be_patched = SectionExtender(binary_fname, 1024).add_section()
 
@@ -151,6 +178,12 @@ class Patching:
 
         # Estimate size of patch to find space for newly added references and data
         self.new_memory_writing_address = new_memory_address + 2 * (self.patch_code_block_end.addr - self.patch_code_block_start.addr)
+
+
+
+        start_time = time.time()
+
+
 
         # Jump to new Memory
         print("\n\t " + str(start_address_of_patch), self.patch_code_block_end.addr - self.patch_code_block_start.addr)
@@ -234,7 +267,14 @@ class Patching:
 
         self.backend.save(self.patching_config.output_path)
 
+        end_time = time.time()
 
+        # Calculate the elapsed time
+        elapsed_time = end_time - start_time
+
+        with open('time.txt', 'a') as error_file:
+            error_message = f"functionName: {self.patching_config.functionName} Elapsed time Rewriting: {elapsed_time:.4f} seconds"
+            error_file.write(error_message + '\n')
 
     def jump_to_new_memory(self, base_address, target_address, patch_start_address_of_patch):
         """

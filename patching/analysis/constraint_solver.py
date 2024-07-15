@@ -181,7 +181,9 @@ class ConstraintSolver:
             self.register_ssa[register] = [register]
 
         if address == self.start_address:
-            if self.variable is not SimTemporaryVariable:
+            if isinstance(self.variable, SimTemporaryVariable):
+                pass
+            else:
                 if statement.offset == self.variable.reg:
                     self.used_registers.append(register)
 
