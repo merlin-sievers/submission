@@ -27,7 +27,7 @@ class Patching:
 
 
         # End the timer
-
+        self.indirection_address = None
         self.new_memory_data_address = None
         self.new_memory_writing_address = None
         self.patch_code_block_end = None
@@ -66,6 +66,9 @@ class Patching:
 
         self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs=False)
         # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
+
+
+
 
         print("\n\t Starting to analyze the patch Program CFGFast...")
         self.cfg_patch = self.project_patch.analyses.CFGFast()
@@ -134,6 +137,7 @@ class Patching:
         s = matched_refs.address_to_refs
         # Preparation for writing the Patch in the vulnerable Version
 
+
         vulnerable_blocks = perfect_matches.get_not_matched_blocks(self.cfge_vuln_specific, self.entry_point_vuln, self.end_vuln, perfect_matches.match_old_address)
         patch_blocks = perfect_matches.get_not_matched_blocks(self.cfge_patch_specific, self.entry_point_patch, self.end_patch, perfect_matches.match_new_address)
 
@@ -148,10 +152,16 @@ class Patching:
         self.code_block_start = self.project_vuln.factory.block(start_address_of_patch)
         self.code_block_end = self.project_vuln.factory.block(max(vulnerable_blocks))
 
+
+        jump_back_address = min([match for match in perfect_matches.match_old_address if match > self.code_block_end.addr])
+
+
         patch_start_address_of_patch = min(patch_blocks)
 
         self.patch_code_block_start = self.project_patch.factory.block(patch_start_address_of_patch)
         self.patch_code_block_end = self.project_patch.factory.block(max(patch_blocks))
+
+
 
         end_time = time.time()
 
@@ -169,7 +179,7 @@ class Patching:
 
         print("\n\t Starting to extend Section...")
 
-        file_to_be_patched = SectionExtender(binary_fname, 4096).extend_last_section_of_segment()
+        file_to_be_patched = SectionExtender(binary_fname, 16384).extend_last_section_of_segment()
 
         # file_to_be_patched = SectionExtender(binary_fname, 1024).add_section()
 
@@ -200,7 +210,7 @@ class Patching:
         self.cfg_patch.get_any_node(patch_start_address_of_patch)
 
         patch_block_start_address = patch_start_address_of_patch
-        vuln_block_start_address = start_address_of_patch
+        self.indirection_address = start_address_of_patch + 8
 
         self.writing_address = new_memory_address
 
@@ -209,13 +219,12 @@ class Patching:
             self.is_thumb = block_patch.thumb
             # Going through every CodeUnit from the BasicBlock
             for instruction_patch in block_patch.capstone.insns:
-                # Check if the instruction is actually just data...
-                # if self.new_def_registers:
-                #     if instruction_patch.address >= self.new_def_registers[0].old_ldr_data_address:
-                #         continue
-                # if self.new_memory_writing_address >= new_memory_address + 65536:
-                #     print(self.writing_address, self.new_memory_writing_address, new_memory_address)
-                #     return 1
+
+
+
+                # Check if there is a reference from outside of the patch into the patch. If so, handle it
+                self.get_references_to_instruction(instruction_patch, matched_refs)
+
                 # Implement the following to use Angr References
                 print("\n\t instruction patch: " + str(instruction_patch))
                 reference = self.get_references_from_instruction(instruction_patch, self.refs_patch, block_patch.thumb)
@@ -227,8 +236,17 @@ class Patching:
                     self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
                     self.writing_address = self.writing_address + instruction_patch.size
 
+            # Handle data mixed between code:
+            if self.writing_address >= self.new_memory_writing_address:
+                print("data mixed with code")
+            elif len(self.new_def_registers) >= 1:
+                if self.writing_address >= self.new_def_registers[0].ldr_data_address:
+                    print("data mixed with code ldr")
+
             patch_block_start_address = patch_block_start_address + block_patch.size
             while patch_block_start_address-1 in self.cfg_patch.memory_data:
+                if patch_block_start_address > self.patch_code_block_end.addr:
+                    break
                 print("Data Address", patch_block_start_address)
                 byte_data = self.project_patch.loader.memory.load(patch_block_start_address-1, self.cfg_patch.memory_data[patch_block_start_address-1].size)
                 patches = RawMemPatch(self.writing_address, byte_data)
@@ -240,8 +258,12 @@ class Patching:
                 patch_block_start_address = patch_block_start_address + self.cfg_patch.memory_data[patch_block_start_address-1].size
 
 
-
-
+        #
+        # Jump back to the original function.
+        if jump_back_address is not None:
+            target_address_str = str(hex(jump_back_address))
+            patches = InlinePatch(self.writing_address, "bl " + target_address_str, is_thumb=self.code_block_start.thumb)
+            self.patches.append(patches)
 
 
         #    Set the End for the last ShiftZone
@@ -619,13 +641,15 @@ class Patching:
         #     self.writing_address = self.writing_address + 2
 
         self.patches.append(patches)
-        self.remember_shifted_bytes(4)
-        self.writing_address = self.writing_address + (instruction_patch.size * 2)
-        patches = RawMemPatch(self.writing_address, b"\x00\xbf")
-        self.patches.append(patches)
+        if instruction_patch.size == 2:
+            self.remember_shifted_bytes(4)
+            self.writing_address = self.writing_address + (instruction_patch.size * 2)
+            patches = RawMemPatch(self.writing_address, b"\x00\xbf")
+            self.patches.append(patches)
             # self.backend.apply_patches(patches)
-        self.writing_address = self.writing_address + 2
-
+            self.writing_address = self.writing_address + 2
+        else:
+            self.writing_address = self.writing_address + instruction_patch.size
 
 
 
@@ -935,6 +959,7 @@ class Patching:
                 condition = self.isInShiftListZone(jump_target, "desc")
                 if ref.toAddr > patch_end:
                     condition = -1
+
             if condition != -1:
 
                 instruction = shift_backend.factory.block(ref.fromAddr+1).disassembly.insns[0]
@@ -1004,7 +1029,7 @@ class Patching:
                 if self.shifts_descending[i].isInsideShiftZone(ref):
                     # print("\n\t Counter desc", i)
                     return i
-
+            # TODO: Check if this is correct <=
             if self.shifts_descending[-1].end <= ref:
                 return len(self.shifts_descending)
 
@@ -1082,11 +1107,15 @@ class Patching:
 
         if new_target is None or (new_target.toAddr < self.writing_address):
             new_target = self.new_memory_writing_address
-
-            data = self.load_data_from_memory(reference.toAddr)
+            if reference.toAddr <= self.project_patch.loader.min_addr:
+                self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+                self.writing_address = self.writing_address + instruction_patch.size
+                return
+            else:
+                data = self.load_data_from_memory(reference.toAddr)
             # Write the data to the new memory address
-            patches = RawMemPatch(self.new_memory_writing_address, data)
-            self.patches.append(patches)
+                patches = RawMemPatch(self.new_memory_writing_address, data)
+                self.patches.append(patches)
         else:
             new_target = new_target.toAddr
 
@@ -1191,8 +1220,66 @@ class Patching:
         self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
         self.writing_address = self.writing_address + instruction_patch.size
 
+    def get_references_to_instruction(self, instruction_patch, matched_refs):
+        # Getting the references that point to the instruction
+        print("Getting references to instruction")
+        references = []
+        for addr in matched_refs.match_to_new_address:
+            if addr == instruction_patch.address:
+                references = matched_refs.match_to_new_address[addr]
+                break
+
+        for ref in references:
+            # Checking if they are from outside of the patch , if so we need to reassemble them
+            if ref.fromAddr < self.code_block_start.addr or ref.fromAddr > self.code_block_end.addr:
+                print("Reference into patch")
+                print(self.writing_address)
+
+                # Checking if Instruction would change size, if so solve this via indirection, i.e. jumping into the space after the jump into new memory
 
 
+
+                offset = 0
+                base = ref.fromAddr-1 - self.project_patch.loader.min_addr
+                target_address = self.writing_address - ref.fromAddr-1 - offset
+                instruction = self.project_vuln.factory.block(ref.fromAddr).disassembly.insns[0]
+
+                if instruction.size == 2:
+
+
+                    new_string = self.replace_jump_target_address(instruction, self.indirection_address)
+                    patch = InlinePatch(ref.fromAddr - 1, new_string, is_thumb=self.code_block_start.thumb)
+                    self.patches.append(patch)
+
+                    target_address = self.writing_address - self.indirection_address
+
+                    new_string = "b.w $+" + str(hex(target_address))
+
+                    code = self.backend.compile_asm(new_string, base=0, is_thumb=self.is_thumb)
+                    patch = RawMemPatch(self.indirection_address, code)
+                    self.patches.append(patch)
+
+                    base = self.indirection_address - self.project_patch.loader.min_addr
+
+
+                    shift_reference = Reference(self.indirection_address, self.writing_address, "control_flow_jump")
+                    self.shift_references.append(shift_reference)
+
+                    self.indirection_address = self.indirection_address + 4
+                else:
+
+                    new_string = self.replace_jump_target_address(instruction, self.writing_address)
+                    patch = InlinePatch(ref.fromAddr-1, new_string, is_thumb=self.code_block_start.thumb)
+
+                    # if target_address > 0:
+                    #     new_string = instruction.mnemonic + " $+" + str(hex(target_address))
+                    # else:
+                    #     new_string = instruction.mnemonic + " $" + str(hex(target_address))
+                    # code = self.backend.compile_asm(new_string, base=base, is_thumb=self.is_thumb)
+                    # patch = RawMemPatch(ref.fromAddr-1, code)
+                    self.patches.append(patch)
+                    shift_reference = Reference(ref.fromAddr-1, self.writing_address, "control_flow_jump")
+                    self.shift_references.append(shift_reference)
 
 
     # Static methods
@@ -1220,4 +1307,6 @@ class Patching:
         register_name = matches[0]
         reg = arch.get_register_offset(register_name)
         return reg
+
+
 

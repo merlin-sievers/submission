@@ -112,14 +112,7 @@ class RefMatcher:
 
 
     def get_refs(self, project, cfg, address):
-        # TODO make independent from function name --> DONE
 
-        # target_function = project.loader.find_symbol(function_name)
-
-        # address = target_function.rebased_addr
-
-        # cfg = project.analyses.CFGEmulated(keep_state=True, state_add_options=angr.sim_options.refs,
-        #                                    context_sensitivity_level=0, starts=[address])
         self.address_to_refs = dict()
         xrefs = set()
         # cfgfast = project.analyses.CFGFast()
@@ -152,7 +145,7 @@ class RefMatcher:
                 refType = r.type_string
                 ref = Reference(fromAddr, toAddr, refType)
                 xrefs.add(ref)
-                if toAddr == 5242880:
+                if toAddr == 5242880 or toAddr == 0:
                     pass
                 else:
                     if fromAddr not in self.address_to_refs:
