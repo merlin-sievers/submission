@@ -15,6 +15,13 @@ class Matcher:
 
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
         for tuple in self.bindiff_results.identical_blocks:
+
+            # Make a sanity check here...
+            if tuple[0].size != tuple[1].size:
+                continue
+
+
+
             self.match_old_address[tuple[0].addr] = tuple[1].addr
             self.match_new_address[tuple[1].addr] = tuple[0].addr
 
@@ -68,8 +75,13 @@ class RefMatcher:
                         for r in refs_patch[ref_patch]:
                             for v in refs_vuln[block_vuln.instruction_addrs[i]]:
                                 if r.refType == v.refType:
-                                    self.match_to_new_address.setdefault(r.toAddr, []).append(v)
-                                    self.match_to_old_address.setdefault(v.toAddr, []).append(r)
+# If there already is a control_flow_jump reference to another address overwrite this one. We trust the basic block matching more than the function matching
+                                    if r.refType == "control_flow_jump":
+                                        self.match_to_new_address[r.toAddr] = [v]
+                                        self.match_to_old_address[v.toAddr] = [r]
+                                    else:
+                                        self.match_to_new_address.setdefault(r.toAddr, []).append(v)
+                                        self.match_to_old_address.setdefault(v.toAddr, []).append(r)
 
 
 
@@ -80,8 +92,13 @@ class RefMatcher:
 
                 if matching:
                     new_ref = Reference(ref.fromAddr, matching[0][0], ref.refType)
-                    self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
-                    self.match_to_old_address.setdefault(matching[0][0], []).append(ref)
+# If there already is a control_flow_jump reference to another address use that one. We trust the basic block matching more than the function matching
+                    if ref.refType == "control_flow_jump":
+                        if ref.toAddr in self.match_to_new_address:
+                            pass
+                        else:
+                            self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
+                            self.match_to_old_address.setdefault(matching[0][0], []).append(ref)
 
                 if ref.toAddr == got_addr:
                     for sec in project_vuln.loader.main_object.sections:
@@ -106,6 +123,18 @@ class RefMatcher:
                         new_ref = Reference(ref.fromAddr, project_vuln.loader.main_object.plt[name], ref.refType)
                         self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
                         self.match_to_old_address.setdefault(project_vuln.loader.main_object.plt[name], []).append(ref)
+
+                symbol = project_patch.loader.find_symbol(ref.toAddr)
+                if symbol is not None:
+                    match_symbol = project_vuln.loader.find_symbol(symbol.name)
+                    if match_symbol is not None:
+                        new_ref = Reference(ref.fromAddr, match_symbol.rebased_addr, ref.refType)
+                        if ref.refType == "control_flow_jump":
+                            self.match_to_new_address[ref.toAddr] = [new_ref]
+                            self.match_to_old_address[match_symbol.rebased_addr] = [ref]
+                        else:
+                            self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
+                            self.match_to_old_address.setdefault(match_symbol.rebased_addr, []).append(ref)
 
         print(sum(len(lst) for lst in self.match_to_old_address.values()), sum(len(lst) for lst in self.match_to_new_address.values()), len(self.match_to_old_address), len(self.match_to_new_address), len(self.match_from_old_address), len(self.match_from_new_address))
 
@@ -145,7 +174,7 @@ class RefMatcher:
                 refType = r.type_string
                 ref = Reference(fromAddr, toAddr, refType)
                 xrefs.add(ref)
-                if toAddr == 5242880 or toAddr == 0:
+                if toAddr == 5242880 or toAddr == 0 or toAddr >= project.loader.main_object.max_addr:
                     pass
                 else:
                     if fromAddr not in self.address_to_refs:

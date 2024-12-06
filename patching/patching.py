@@ -54,6 +54,8 @@ class Patching:
         self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(self.patching_config.functionName).size
         print("\n\t Starting to analyze the vulnerable Program CFGEmul...")
 
+
+
         option = angr.sim_options.refs
         # option = angr.sim_options.resilience
         # option = angr.sim_options.modes["fastpath"]
@@ -62,7 +64,7 @@ class Patching:
 
 
         #TODO: Check if the context_sensitivity_level is correct
-        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_vuln], max_steps=40)
+        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_vuln], max_steps=50)
 
         self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs=False)
         # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
@@ -78,7 +80,7 @@ class Patching:
 
 
         print("\n\t Starting to analyze the patch Program CFGEmul...")
-        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_patch], max_steps=40)
+        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_patch],max_steps=50)
 
 
         print("\n\t Starting to analyze the patch Program DDG...")
@@ -179,7 +181,7 @@ class Patching:
 
         print("\n\t Starting to extend Section...")
 
-        file_to_be_patched = SectionExtender(binary_fname, 16384).extend_last_section_of_segment()
+        file_to_be_patched = SectionExtender(binary_fname, 4096).extend_last_section_of_segment()
 
         # file_to_be_patched = SectionExtender(binary_fname, 1024).add_section()
 
@@ -220,7 +222,10 @@ class Patching:
             # Going through every CodeUnit from the BasicBlock
             for instruction_patch in block_patch.capstone.insns:
 
-
+                # TODO: Adapt to work for non-thumb as well
+                if instruction_patch.address-1 in self.cfg_patch.memory_data:
+                    if self.cfg_patch.memory_data[instruction_patch.address-1].size > 0:
+                        continue
 
                 # Check if there is a reference from outside of the patch into the patch. If so, handle it
                 self.get_references_to_instruction(instruction_patch, matched_refs)
@@ -242,6 +247,10 @@ class Patching:
             elif len(self.new_def_registers) >= 1:
                 if self.writing_address >= self.new_def_registers[0].ldr_data_address:
                     print("data mixed with code ldr")
+                    print(patch_block_start_address, block_patch.size)
+                    if block_patch.size == 0:
+                        print(block_patch)
+                        break
 
             patch_block_start_address = patch_block_start_address + block_patch.size
             while patch_block_start_address-1 in self.cfg_patch.memory_data:
@@ -258,7 +267,7 @@ class Patching:
                 patch_block_start_address = patch_block_start_address + self.cfg_patch.memory_data[patch_block_start_address-1].size
 
 
-        #
+
         # Jump back to the original function.
         if jump_back_address is not None:
             target_address_str = str(hex(jump_back_address))
@@ -303,7 +312,7 @@ class Patching:
         Write a branch to target_address instruction at base_address
         :param base_address: Address of the instruction to be patched
         :param target_address: Address of the target instruction
-        """
+        # """
         patches = InlinePatch(base_address, "mov ip, lr", is_thumb=self.code_block_start.thumb)
         self.patches.append(patches)
         base_address = base_address + 2
@@ -394,8 +403,7 @@ class Patching:
 
         # Tracking Register for later backward slicing and static analysis
 
-        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+|d[0-9]+))')
-
+        register_pattern = re.compile(r'\b(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+|d[0-9]+)\b')
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction_patch.op_str)
 
@@ -511,7 +519,16 @@ class Patching:
         # Reference outside of function and outside of patch
             else:
                 self.reassemble_reference_at_different_address(instruction_patch, old_reference.toAddr, self.writing_address)
-                self.writing_address = self.writing_address + instruction_patch.size
+                # self.writing_address = self.writing_address + instruction_patch.size
+                if instruction_patch.size == 2:
+                    self.remember_shifted_bytes(4)
+                    self.writing_address = self.writing_address + (instruction_patch.size * 2)
+                    patches = RawMemPatch(self.writing_address, b"\x00\xbf")
+                    self.patches.append(patches)
+                    # self.backend.apply_patches(patches)
+                    self.writing_address = self.writing_address + 2
+                else:
+                    self.writing_address = self.writing_address + instruction_patch.size
 
             shift_reference = Reference(self.writing_address, old_reference.toAddr, "control_flow_jump")
             self.shift_references.append(shift_reference)
@@ -701,7 +718,7 @@ class Patching:
         # if offset is not None:
         #     reference = offset
 
-        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+|d[0-9]+))')
+        register_pattern = re.compile(r'\b(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+|d[0-9]+)\b')
 
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction_patch.op_str)
@@ -945,6 +962,9 @@ class Patching:
 
     def fix_shifts_in_references(self, patch_start_address_of_patch, shift_backend):
 
+
+        # TODO: Double Check if "asc" and "desc" are corrrectly used
+
         patch_end = self.shifts_ascending[-1].end
 
         self.patches = []
@@ -952,11 +972,11 @@ class Patching:
         for ref in xrefs:
             jump_target = ref.toAddr
             if ref.toAddr < ref.fromAddr:
-                condition = self.isInShiftListZone(ref.fromAddr, "asc")
+                condition = self.isInShiftListZone(ref.fromAddr, "desc")
                 if ref.toAddr < patch_start_address_of_patch:
                     condition = -1
             else:
-                condition = self.isInShiftListZone(jump_target, "desc")
+                condition = self.isInShiftListZone(jump_target, "asc")
                 if ref.toAddr > patch_end:
                     condition = -1
 
@@ -1155,8 +1175,8 @@ class Patching:
         nodes = self.cfg_patch.get_all_nodes(instruction_patch.address, anyaddr=True)
         largest_node = max(nodes, key=lambda node: node.size)
         block = largest_node.block
-
-        cfge_help = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[block.addr], max_steps=20)
+        #TODO: Check if the max_step value should be more flexible
+        cfge_help = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[block.addr], max_steps=40)
         ddge_help = self.project_patch.analyses.DDG(cfg=cfge_help, start=block.addr)
 
         instr_view = ddge_help.view[instruction_patch.address]
@@ -1300,7 +1320,7 @@ class Patching:
 
     @staticmethod
     def get_register_from_instruction(instruction, arch):
-        register_pattern = re.compile(r'(?=(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+|d[0-9]+))')
+        register_pattern = re.compile(r'\b(r\d+|sb|sl|ip|fp|sp|lr|s[0-9]+|d[0-9]+)\b')
         # Find all matches in the instruction string
         matches = register_pattern.findall(instruction.op_str)
         # Extract the first match (assuming there is at least one match)
