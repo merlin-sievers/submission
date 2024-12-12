@@ -64,7 +64,7 @@ class Patching:
 
 
         #TODO: Check if the context_sensitivity_level is correct
-        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_vuln], max_steps=50)
+        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_vuln], max_steps=70)
 
         self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs=False)
         # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
@@ -80,11 +80,11 @@ class Patching:
 
 
         print("\n\t Starting to analyze the patch Program CFGEmul...")
-        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_patch],max_steps=50)
+        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_patch], max_steps=70)
 
 
         print("\n\t Starting to analyze the patch Program DDG...")
-        self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
+        self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch, call_depth=0)
         # self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
         self.cdg_patch_specific = None
 
@@ -181,7 +181,7 @@ class Patching:
 
         print("\n\t Starting to extend Section...")
 
-        file_to_be_patched = SectionExtender(binary_fname, 4096).extend_last_section_of_segment()
+        file_to_be_patched = SectionExtender(binary_fname, 16384).extend_last_section_of_segment()
 
         # file_to_be_patched = SectionExtender(binary_fname, 1024).add_section()
 
@@ -518,9 +518,9 @@ class Patching:
 
         # Reference outside of function and outside of patch
             else:
-                self.reassemble_reference_at_different_address(instruction_patch, old_reference.toAddr, self.writing_address)
+                changed = self.reassemble_reference_at_different_address(instruction_patch, old_reference.toAddr, self.writing_address)
                 # self.writing_address = self.writing_address + instruction_patch.size
-                if instruction_patch.size == 2:
+                if instruction_patch.size == 2 and changed:
                     self.remember_shifted_bytes(4)
                     self.writing_address = self.writing_address + (instruction_patch.size * 2)
                     patches = RawMemPatch(self.writing_address, b"\x00\xbf")
@@ -682,8 +682,17 @@ class Patching:
         else:
             new_string = self.replace_jump_target_address(instruction_patch, target_address)
 
+
         patches = InlinePatch(writing_address, new_string, is_thumb=self.is_thumb)
         self.patches.append(patches)
+        # Return if the instruction has changed or not to know if we need to add a nop
+        instruction_string = instruction_patch.mnemonic + " " + instruction_patch.op_str
+        if new_string == instruction_string:
+            return False
+        else:
+            return True
+
+
         # self.backend.apply_patches(patches)
 
     def rewriting_and_adding_reference_to_the_old_program(self, reference, instruction_patch, matched_refs):
@@ -695,13 +704,6 @@ class Patching:
         elif reference.refType == "offset":
             self.add_offset_reference(reference, instruction_patch)
         elif reference.refType == "control_flow_jump":
-            symbol_patch = self.project_patch.loader.find_symbol(reference.toAddr)
-            if symbol_patch is not None:
-                target = self.project_vuln.loader.find_symbol("gzwrite")
-                if target is not None:
-                    self.reassemble_reference_at_different_address(instruction_patch, target.rebased_addr, self.writing_address)
-                    self.writing_address = self.writing_address + instruction_patch.size
-                    return
 
             self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
             shift_reference = Reference(self.writing_address, self.writing_address + reference.toAddr - reference.fromAddr, "control_flow_jump")
@@ -1315,6 +1317,8 @@ class Patching:
         instruction_string = instruction_patch.mnemonic + " " + instruction_patch.op_str
 
         modified_string = re.sub(r'#0x[0-9A-Fa-f]+', "#" + str(hex(difference)), instruction_string)
+
+
         return modified_string
 
 
