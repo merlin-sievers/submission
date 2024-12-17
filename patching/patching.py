@@ -84,7 +84,7 @@ class Patching:
 
 
         print("\n\t Starting to analyze the patch Program DDG...")
-        self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch, call_depth=0)
+        self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
         # self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
         self.cdg_patch_specific = None
 
@@ -241,11 +241,20 @@ class Patching:
                     self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
                     self.writing_address = self.writing_address + instruction_patch.size
 
+                if self.writing_address >= self.new_memory_writing_address:
+                    print("data mixed with code")
+                elif len(self.new_def_registers) >= 1:
+                    if self.writing_address >= self.new_def_registers[0].ldr_data_address - 4:
+                        print("data mixed with code ldr inside block")
+                        print(patch_block_start_address, block_patch.size)
+                        break
+
+
             # Handle data mixed between code:
             if self.writing_address >= self.new_memory_writing_address:
                 print("data mixed with code")
             elif len(self.new_def_registers) >= 1:
-                if self.writing_address >= self.new_def_registers[0].ldr_data_address:
+                if self.writing_address >= self.new_def_registers[0].ldr_data_address-4:
                     print("data mixed with code ldr")
                     print(patch_block_start_address, block_patch.size)
                     if block_patch.size == 0:
@@ -265,7 +274,15 @@ class Patching:
                     break
 
                 patch_block_start_address = patch_block_start_address + self.cfg_patch.memory_data[patch_block_start_address-1].size
-
+                if self.writing_address >= self.new_memory_writing_address:
+                    print("data mixed with code")
+                elif len(self.new_def_registers) >= 1:
+                    if self.writing_address >= self.new_def_registers[0].ldr_data_address - 4:
+                        print("data mixed with code ldr")
+                        print(patch_block_start_address, block_patch.size)
+                        if block_patch.size == 0:
+                            print(block_patch)
+                            break
 
 
         # Jump back to the original function.

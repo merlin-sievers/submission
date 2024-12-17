@@ -126,15 +126,16 @@ class RefMatcher:
 
                 symbol = project_patch.loader.find_symbol(ref.toAddr)
                 if symbol is not None:
-                    match_symbol = project_vuln.loader.find_symbol(symbol.name)
-                    if match_symbol is not None:
-                        new_ref = Reference(ref.fromAddr, match_symbol.rebased_addr, ref.refType)
-                        if ref.refType == "control_flow_jump":
-                            self.match_to_new_address[ref.toAddr] = [new_ref]
-                            self.match_to_old_address[match_symbol.rebased_addr] = [ref]
-                        else:
-                            self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
-                            self.match_to_old_address.setdefault(match_symbol.rebased_addr, []).append(ref)
+                    if symbol.type.value != 1:
+                        match_symbol = project_vuln.loader.find_symbol(symbol.name)
+                        if match_symbol is not None:
+                            new_ref = Reference(ref.fromAddr, match_symbol.rebased_addr, ref.refType)
+                            if ref.refType == "control_flow_jump":
+                                self.match_to_new_address[ref.toAddr] = [new_ref]
+                                self.match_to_old_address[match_symbol.rebased_addr] = [ref]
+                            else:
+                                self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
+                                self.match_to_old_address.setdefault(match_symbol.rebased_addr, []).append(ref)
 
         print(sum(len(lst) for lst in self.match_to_old_address.values()), sum(len(lst) for lst in self.match_to_new_address.values()), len(self.match_to_old_address), len(self.match_to_new_address), len(self.match_from_old_address), len(self.match_from_new_address))
 
