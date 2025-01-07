@@ -1,0 +1,9 @@
+prefix=/home/jaenich/Magma/magma/targets/openssl/repo/SSL010/vuln_O3
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: OpenSSL
+Description: Secure Sockets Layer and cryptography libraries and tools
+Version: 3.0.0-beta2-dev
+Requires: libssl libcrypto

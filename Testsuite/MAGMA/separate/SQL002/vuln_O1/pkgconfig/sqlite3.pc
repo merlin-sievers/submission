@@ -1,0 +1,13 @@
+# Package Information for pkg-config
+
+prefix=/home/jaenich/Magma/magma/targets/sqlite3/repo/SQL002/vuln_O1
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: SQLite
+Description: SQL database engine
+Version: 3.37.0
+Libs: -L${libdir} -lsqlite3
+Libs.private: -lm -l:libz.so -l:liblzma.so -l:libpng16.so -l:magma_lar.o
+Cflags: -I${includedir}
