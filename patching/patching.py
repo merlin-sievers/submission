@@ -64,7 +64,7 @@ class Patching:
 
 
         #TODO: Check if the context_sensitivity_level is correct
-        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_vuln], max_steps=70)
+        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_vuln], max_steps=30)
 
         self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs=False)
         # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
@@ -80,7 +80,7 @@ class Patching:
 
 
         print("\n\t Starting to analyze the patch Program CFGEmul...")
-        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_patch], max_steps=70)
+        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=option, starts=[self.entry_point_patch], max_steps=30)
 
 
         print("\n\t Starting to analyze the patch Program DDG...")
@@ -721,11 +721,11 @@ class Patching:
         elif reference.refType == "offset":
             self.add_offset_reference(reference, instruction_patch)
         elif reference.refType == "control_flow_jump":
-
-            self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
-            shift_reference = Reference(self.writing_address, self.writing_address + reference.toAddr - reference.fromAddr, "control_flow_jump")
-            self.shift_references.append(shift_reference)
-            self.writing_address = self.writing_address + instruction_patch.size
+            self.add_control_flow_jump_reference(instruction_patch, reference, matched_refs)
+            # self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+            # shift_reference = Reference(self.writing_address, self.writing_address + reference.toAddr - reference.fromAddr, "control_flow_jump")
+            # self.shift_references.append(shift_reference)
+            # self.writing_address = self.writing_address + instruction_patch.size
 
 
 
@@ -1195,7 +1195,7 @@ class Patching:
         largest_node = max(nodes, key=lambda node: node.size)
         block = largest_node.block
         #TODO: Check if the max_step value should be more flexible
-        cfge_help = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[block.addr], max_steps=40)
+        cfge_help = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[block.addr], max_steps=30)
         ddge_help = self.project_patch.analyses.DDG(cfg=cfge_help, start=block.addr)
 
         instr_view = ddge_help.view[instruction_patch.address]
@@ -1319,6 +1319,49 @@ class Patching:
                     self.patches.append(patch)
                     shift_reference = Reference(ref.fromAddr-1, self.writing_address, "control_flow_jump")
                     self.shift_references.append(shift_reference)
+
+    # Add the control flow jump reference to new memory and also add the small function that is jumped to to new memory
+    def add_control_flow_jump_reference(self, instruction_patch, reference, matched_refs):
+        # The new function that needs to be added to the new memory is a reference.toAddr
+        function = self.project_patch.kb.functions.function(addr=reference.toAddr)
+        if function is None:
+            self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
+            self.writing_address = self.writing_address + instruction_patch.size
+        else:
+            # So I need to change the control_flow reference into a reference jumping to new memory.
+            new_string = self.replace_jump_target_address(instruction_patch, self.new_memory_writing_address)
+            patches = InlinePatch(self.writing_address, new_string, is_thumb=self.is_thumb)
+            self.patches.append(patches)
+            self.writing_address = self.writing_address + instruction_patch.size
+
+            # Then I need to add the new function to the new memory by iterating through all the instructions and handling them as well
+            # for block in function.bl
+            largest_block = max(function.blocks, key=lambda block: block.addr + block.size)
+            function_end = largest_block.addr + largest_block.size
+            block_address = min(function.block_addrs_set)
+            cfge_cfj_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0, state_add_options=angr.sim_options.refs, starts=[reference.toAddr])
+            new_refs = matched_refs.get_refs(self.project_patch, cfge_cfj_specific, reference.toAddr)
+            matched_refs.match_references_from_perfect_matched_blocks(None, None, new_refs, self.project_vuln, self.project_patch, reference.toAddr, function_end)
+            writing_address = self.writing_address
+            self.writing_address = self.new_memory_writing_address
+            while block_address in function.block_addrs_set:
+                block = self.project_patch.factory.block(block_address)
+                for ins in block.capstone.insns:
+                    if ins.address <= function_end:
+
+                        print("\n\t instruction patch new function: " + str(ins))
+                        reference = self.get_references_from_instruction(ins, self.refs_patch,
+                                                                         block.thumb)
+
+                        # Handling of possible References
+                        if reference is not None:
+                            self.handle_references(reference, matched_refs, ins)
+                        else:
+                            self.rewriting_bytes_of_code_unit_to_new_address(ins, self.writing_address)
+                            self.writing_address = self.writing_address + ins.size
+                        self.new_memory_writing_address = self.writing_address
+                block_address = block_address + block.size
+            self.writing_address = writing_address
 
 
     # Static methods

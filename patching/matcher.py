@@ -62,26 +62,27 @@ class RefMatcher:
         help = [ref for ref in refs_patch if entryPoint <= ref <= end]
         print(len(help))
         for ref_patch in [ref for ref in refs_patch if entryPoint <= ref <= end]:
-            relevant_addrs = [addr for addr in perfect_matches.match_new_address if 0 <= (ref_patch - addr) <= 80]
-            for addr in relevant_addrs:
-                block_patch = project_patch.factory.block(addr)
-                if ref_patch in block_patch.instruction_addrs:
-                    i = block_patch.instruction_addrs.index(ref_patch)
-                    block_vuln = project_vuln.factory.block(perfect_matches.match_new_address[addr])
-                    if block_vuln.instruction_addrs[i] in refs_vuln:
-                        self.match_from_new_address.setdefault(ref_patch, []).extend(refs_vuln[block_vuln.instruction_addrs[i]])
-                        self.match_from_old_address.setdefault(refs_vuln[block_vuln.instruction_addrs[i]][0].fromAddr, []).extend(refs_patch[ref_patch])
+            if perfect_matches is not None:
+                relevant_addrs = [addr for addr in perfect_matches.match_new_address if 0 <= (ref_patch - addr) <= 80]
+                for addr in relevant_addrs:
+                    block_patch = project_patch.factory.block(addr)
+                    if ref_patch in block_patch.instruction_addrs:
+                        i = block_patch.instruction_addrs.index(ref_patch)
+                        block_vuln = project_vuln.factory.block(perfect_matches.match_new_address[addr])
+                        if block_vuln.instruction_addrs[i] in refs_vuln:
+                            self.match_from_new_address.setdefault(ref_patch, []).extend(refs_vuln[block_vuln.instruction_addrs[i]])
+                            self.match_from_old_address.setdefault(refs_vuln[block_vuln.instruction_addrs[i]][0].fromAddr, []).extend(refs_patch[ref_patch])
 
-                        for r in refs_patch[ref_patch]:
-                            for v in refs_vuln[block_vuln.instruction_addrs[i]]:
-                                if r.refType == v.refType:
-# If there already is a control_flow_jump reference to another address overwrite this one. We trust the basic block matching more than the function matching
-                                    if r.refType == "control_flow_jump":
-                                        self.match_to_new_address[r.toAddr] = [v]
-                                        self.match_to_old_address[v.toAddr] = [r]
-                                    else:
-                                        self.match_to_new_address.setdefault(r.toAddr, []).append(v)
-                                        self.match_to_old_address.setdefault(v.toAddr, []).append(r)
+                            for r in refs_patch[ref_patch]:
+                                for v in refs_vuln[block_vuln.instruction_addrs[i]]:
+                                    if r.refType == v.refType:
+    # If there already is a control_flow_jump reference to another address overwrite this one. We trust the basic block matching more than the function matching
+                                        if r.refType == "control_flow_jump":
+                                            self.match_to_new_address[r.toAddr] = [v]
+                                            self.match_to_old_address[v.toAddr] = [r]
+                                        else:
+                                            self.match_to_new_address.setdefault(r.toAddr, []).append(v)
+                                            self.match_to_old_address.setdefault(v.toAddr, []).append(r)
 
 
 
