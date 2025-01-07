@@ -6,12 +6,19 @@ def install_git_repo(url, repo_name):
     subprocess.check_call(['git', 'clone', url])
     subprocess.check_call(['pip', 'install', '-e', repo_name])
 
+
+def install_lief():
+    subprocess.check_call(['pip', 'install', 'LIEF/api/python'])
+
 # These download the repos via SSH so the user needs to make sure to have an SSH key (this is mandatory since Aug 2021)
 # The packages need to be downloaded in this order (patcherex depends on povsim and compilerex)
 install_git_repo('git@github.com:mechaphish/povsim.git', 'povsim')
 install_git_repo('git@github.com:mechaphish/compilerex.git', 'compilerex')
-install_git_repo('git@github.com:angr/patcherex.git', 'patcherex')
+# install_git_repo('git@github.com:angr/patcherex.git', 'patcherex')
 install_git_repo('git@github.com:axt/angr-utils.git', 'angr-utils')
+
+install_lief()
+
 
 setup(
     name='variable-backward-slice',
@@ -25,7 +32,7 @@ setup(
         'monkeyhex~=1.7.4',
         'archinfo~=9.2.72',
         'networkx~=3.1',
-        'lief~=0.13.2',
+        # 'lief~=0.13.2',
         'cle~=9.2.72',
         'pyelftools~=0.30',
         'capstone~=5.0.0.post1',
