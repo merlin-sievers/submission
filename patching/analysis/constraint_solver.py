@@ -5,7 +5,7 @@ from angr.sim_variable import SimTemporaryVariable
 
 # Assumptions Vex is only in SSA Form inside of a basic block.
 class ConstraintSolver:
-    def __init__(self, project, start_address):
+    def __init__(self, project, start_address, ip_address=None):
         self.project = project
         self.ctx = z3.Context()
         self.solver = z3.Solver()
@@ -20,6 +20,8 @@ class ConstraintSolver:
         self._vex_expr_handlers = []
         self._vex_stmt_handlers = []
         self.__init_handlers()
+
+        self.ip_address = ip_address
 
 
 
