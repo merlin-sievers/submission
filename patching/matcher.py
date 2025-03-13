@@ -142,15 +142,30 @@ class RefMatcher:
 
 
 
-    def get_refs(self, project, cfg, address):
+    def get_refs(self, project, cfg, address, cfg_fast):
 
         self.address_to_refs = dict()
         xrefs = set()
         # cfgfast = project.analyses.CFGFast()
+
+
+
+        for fast_node in cfg_fast.graph.nodes:
+            if fast_node.block is not None:
+                if fast_node.addr >= address:
+                    for succ in fast_node.successors:
+                        fromAddr = fast_node.block.instruction_addrs[-1]
+                        if abs(fast_node.block.instruction_addrs[-1] - succ.addr) > 4:
+                            ref = Reference(fromAddr, succ.addr, "control_flow_jump")
+                            xrefs.add(ref)
+                            if fast_node.block.instruction_addrs[-1] not in self.address_to_refs:
+                                self.address_to_refs[fromAddr] = [ref]
+                            else:
+                                self.address_to_refs[fromAddr].append(ref)
+
+
         for node in cfg.graph.nodes:
-
             if node.final_states is not None:
-
                 for final in node.final_states:
                     if final.history.jump_source is not None:
                         if final.history.jump_target.concrete:
