@@ -276,7 +276,7 @@ class FunctionPatch(Patching):
         self.indirection_address = self.start_address_of_patch + 8
         new_memory_address = self.writing_address
         while patch_block_start_address <= self.patch_code_block_end.addr:
-            nodes = self.cfg_patch.get_all_nodes(patch_block_start_address)
+            nodes = self.cfge_patch_specific.get_all_nodes(patch_block_start_address)
             node = max(nodes, key=lambda node: node.size, default=None)
 
             block_patch = self.project_patch.factory.block(patch_block_start_address, node.block.size)
