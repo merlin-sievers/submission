@@ -145,8 +145,8 @@ class FunctionPatch(Patching):
         self.start_address_of_patch = self.entry_point_vuln
 
         self.code_block_start = self.project_vuln.factory.block(self.start_address_of_patch)
-        self.code_block_end = self.project_vuln.factory.block(max(vulnerable_blocks))
-
+        # self.code_block_end = self.project_vuln.factory.block(max(vulnerable_blocks))
+        self.code_block_end = self.project_vuln.factory.block(self.end_vuln)
         self.jump_back_address = min(
             [match for match in perfect_matches.match_old_address if match > self.code_block_end.addr], default=None)
 
@@ -155,7 +155,8 @@ class FunctionPatch(Patching):
         self.patch_start_address_of_patch = self.entry_point_patch
 
         self.patch_code_block_start = self.project_patch.factory.block(self.patch_start_address_of_patch)
-        self.patch_code_block_end = self.project_patch.factory.block(max(patch_blocks))
+        # self.patch_code_block_end = self.project_patch.factory.block(max(patch_blocks))
+        self.patch_code_block_end = self.project_patch.factory.block(self.end_patch)
 
         with open("block.txt", 'a') as error_file:
             error_message = f"BinaryName: {self.patching_config.binary_path} functionName: {self.patching_config.functionName} Function Size:{self.project_patch.loader.find_symbol(self.patching_config.functionName).size}  Patch Size: {self.patch_code_block_end.addr + self.patch_code_block_end.size - self.patch_code_block_start.addr}"
@@ -279,7 +280,11 @@ class FunctionPatch(Patching):
             nodes = self.cfge_patch_specific.get_all_nodes(patch_block_start_address)
             node = max(nodes, key=lambda node: node.size, default=None)
 
-            block_patch = self.project_patch.factory.block(patch_block_start_address, node.block.size)
+            if node is None:
+                size = None
+            else:
+                size = node.block.size
+            block_patch = self.project_patch.factory.block(patch_block_start_address, size)
             self.is_thumb = block_patch.thumb
             # Going through every CodeUnit from the BasicBlock
             for instruction_patch in block_patch.capstone.insns:
@@ -287,6 +292,7 @@ class FunctionPatch(Patching):
                 # TODO: Adapt to work for non-thumb as well
                 end_address = self.check_for_data(instruction_patch, end_address)
                 if end_address != instruction_patch.address:
+                    print("Check For data", end_address, instruction_patch.address)
                     continue
 
                 # Check if there is a reference from outside of the patch into the patch. If so, handle it
@@ -298,6 +304,7 @@ class FunctionPatch(Patching):
 
                 # Handling of possible References
                 if reference is not None:
+                    print("reference", reference.refType)
                     self.handle_references(reference, matched_refs, instruction_patch)
                 else:
                     self.rewriting_bytes_of_code_unit_to_new_address(instruction_patch, self.writing_address)
@@ -314,9 +321,9 @@ class FunctionPatch(Patching):
                             minimal_address = self.new_def_registers[i].ldr_data_address
                         i = i + 1
                     if self.writing_address >= minimal_address - 4:
-                        print("data mixed with code ldr 1")
+                        print("data mixed with code ldr 1a")
                         maximum_address = max([register.ldr_data_address for register in self.new_def_registers])
-                        shift = maximum_address + 4 - self.writing_address
+                        shift = minimal_address - self.writing_address
                         self.writing_address = maximum_address + 4
                         print("Shift", shift, "writing adress", self.writing_address)
                         self.remember_shifted_bytes(shift)
@@ -335,10 +342,10 @@ class FunctionPatch(Patching):
                         minimal_address = self.new_def_registers[i].ldr_data_address
                     i = i + 1
                 if self.writing_address >= minimal_address - 4:
-                    print("data mixed with code ldr 1")
+                    print("data mixed with code ldr 1b")
                     print(patch_block_start_address, block_patch.size)
                     maximum_address = max([register.ldr_data_address for register in self.new_def_registers])
-                    shift = maximum_address + 4 - self.writing_address
+                    shift = minimal_address - self.writing_address
                     self.writing_address = maximum_address + 4
                     print("Shift", shift, "writing adress", self.writing_address)
                     self.remember_shifted_bytes(shift)
@@ -348,19 +355,22 @@ class FunctionPatch(Patching):
                         break
 
             patch_block_start_address = patch_block_start_address + block_patch.size
+            data_shifter = True
+            shift_address = self.writing_address
             while patch_block_start_address - 1 in self.cfg_patch.memory_data:
                 if patch_block_start_address > self.patch_code_block_end.addr:
                     break
                 print("Data Address", patch_block_start_address)
+
                 byte_data = self.project_patch.loader.memory.load(patch_block_start_address - 1,
                                                                   self.cfg_patch.memory_data[
                                                                       patch_block_start_address - 1].size)
                 self.handle_jump_table(patch_block_start_address)
-
-                patches = RawMemPatch(self.writing_address, byte_data)
-                self.patches.append(patches)
-                self.writing_address = self.writing_address + self.cfg_patch.memory_data[
-                    patch_block_start_address - 1].size
+                if data_shifter:
+                    patches = RawMemPatch(self.writing_address, byte_data)
+                    self.patches.append(patches)
+                    self.writing_address = self.writing_address + self.cfg_patch.memory_data[
+                        patch_block_start_address - 1].size
                 if self.cfg_patch.memory_data[patch_block_start_address - 1].size < 1:
                     break
 
@@ -377,15 +387,17 @@ class FunctionPatch(Patching):
                             minimal_address = self.new_def_registers[i].ldr_data_address
                         i = i + 1
                     if self.writing_address >= minimal_address - 4:
-                        print("data mixed with code ldr 2")
+                        print("data mixed with code ldr 2c")
                         print(patch_block_start_address, block_patch.size)
                         maximum_address = max([register.ldr_data_address for register in self.new_def_registers])
-                        shift = maximum_address + 4 - self.writing_address
-                        self.writing_address = self.writing_address - 4
+                        shift = minimal_address - shift_address
+                        # shift = maximum_address + 4 - minimal_address
+                        # self.writing_address = self.writing_address - 2
                         self.remember_shifted_bytes(shift)
                         self.writing_address = maximum_address + 4
                         print("Shift", shift, "writing adress", self.writing_address)
                         self.limit = len(self.new_def_registers) + 1
+                        data_shifter = False
                         if block_patch.size == 0:
                             print(block_patch)
                             break
@@ -661,7 +673,7 @@ class FunctionPatch(Patching):
 
     def handle_matched_reference(self, reference, old_reference, instruction_patch, matched_refs):
         ref_type = reference.refType
-
+        print("reference matched")
         # Depending on the type of the reference there are now different ways to proceed:
         # First READ reference
         if ref_type == "read":
@@ -687,7 +699,7 @@ class FunctionPatch(Patching):
 
 
     def remember_shifted_bytes(self, number_shifted_bytes):
-
+        print("Shift remembered", number_shifted_bytes, self.writing_address)
         outside_shift_ascending = Shift()
 
         outside_shift_descending = Shift()
@@ -1439,48 +1451,103 @@ class FunctionPatch(Patching):
 
 
     def check_for_data(self, instruction_patch, end_address):
+
+        if instruction_patch.address < end_address:
+            print("Hallo")
+            return end_address
+
+
         if instruction_patch.address - 1 in self.cfg_patch.memory_data:
             if self.cfg_patch.memory_data[instruction_patch.address - 1].sort == "code reference":
                 end_address = instruction_patch.address
                 return end_address
-            end_address = instruction_patch.address - 1 + self.cfg_patch.memory_data[instruction_patch.address - 1].size
-            self.writing_address = self.writing_address + instruction_patch.size
+            data_shifter = True
+            shift_address = self.writing_address
+            address = instruction_patch.address
+            while address - 1 in self.cfg_patch.memory_data:
+                if address > self.patch_code_block_end.addr:
+                    break
+
+                byte_data = self.project_patch.loader.memory.load(address - 1,
+                                                                  self.cfg_patch.memory_data[
+                                                                      address - 1].size)
+                self.handle_jump_table(address)
+                end_address = address + 4
+                if data_shifter:
+                    print("Hallo1")
+                    patches = RawMemPatch(self.writing_address, byte_data)
+                    self.patches.append(patches)
+                    self.writing_address = self.writing_address + self.cfg_patch.memory_data[
+                        address - 1].size
+                if self.cfg_patch.memory_data[address - 1].size < 1:
+                    break
+
+                address = address + self.cfg_patch.memory_data[
+                    address - 1].size
+                # if self.writing_address >= self.new_memory_writing_address:
+                #     print("data mixed with code")
+                # el
+                if len(self.new_def_registers) >= self.limit:
+                    minimal_address = self.new_def_registers[self.limit - 1].ldr_data_address
+                    i = self.limit
+                    while i < len(self.new_def_registers):
+                        if self.new_def_registers[i].ldr_data_address <= minimal_address:
+                            minimal_address = self.new_def_registers[i].ldr_data_address
+                        i = i + 1
+                    if self.writing_address >= minimal_address - 4:
+                        print("data mixed with code ldr 2c")
+                        maximum_address = max([register.ldr_data_address for register in self.new_def_registers])
+                        shift = minimal_address - shift_address
+                        # shift = maximum_address + 4 - minimal_address
+                        # self.writing_address = self.writing_address - 2
+                        self.remember_shifted_bytes(shift)
+                        self.writing_address = maximum_address + 4
+                        print("Shift", shift, "writing adress", self.writing_address)
+                        self.limit = len(self.new_def_registers) + 1
+                        data_shifter = False
+
+
+
+            # pririting_address = self.writing_address + self.cfg_patch.memory_data[instruction_patch.address - 1].size
             # self.remember_shifted_bytes(instruction_patch.size)
             # print("Shift", instruction_patch.size, "writing adress", self.writing_address)
-            if len(self.new_def_registers) >= self.limit:
-                minimal_address = self.new_def_registers[self.limit - 1].ldr_data_address
-                i = self.limit
-                while i < len(self.new_def_registers):
-                    if self.new_def_registers[i].ldr_data_address <= minimal_address:
-                        minimal_address = self.new_def_registers[i].ldr_data_address
-                    i = i + 1
-                if self.writing_address >= minimal_address - 4:
-                    print("data mixed with code ldr 1")
-                    maximum_address = max([register.ldr_data_address for register in self.new_def_registers])
-                    shift = maximum_address + 4 - self.writing_address
-                    self.writing_address = maximum_address + 4
-                    print("Shift", shift, "writing adress", self.writing_address)
-                    self.remember_shifted_bytes(shift)
-                    self.limit = len(self.new_def_registers) + 1
+            # if len(self.new_def_registers) >= self.limit:
+            #     minimal_address = self.new_def_registers[self.limit - 1].ldr_data_address
+            #     i = self.limit
+            #     while i < len(self.new_def_registers):
+            #         if self.new_def_registers[i].ldr_data_address <= minimal_address:
+            #             minimal_address = self.new_def_registers[i].ldr_data_address
+            #         i = i + 1
+            #     if self.writing_address >= minimal_address - 4:
+            #         print("data mixed with code ldr 1c")
+            #         maximum_address = max([register.ldr_data_address for register in self.new_def_registers])
+            #         shift = minimal_address - self.writing_address
+            #         self.writing_address = maximum_address + 4
+            #         print("Shift", shift, "writing adress", self.writing_address)
+            #         self.remember_shifted_bytes(shift)
+            #         self.limit = len(self.new_def_registers) + 1
             return end_address
         elif instruction_patch.address < end_address:
-            self.writing_address = self.writing_address + instruction_patch.size
-            # self.remember_shifted_bytes(instruction_patch.size)
-            if len(self.new_def_registers) >= self.limit:
-                minimal_address = self.new_def_registers[self.limit - 1].ldr_data_address
-                i = self.limit
-                while i < len(self.new_def_registers):
-                    if self.new_def_registers[i].ldr_data_address <= minimal_address:
-                        minimal_address = self.new_def_registers[i].ldr_data_address
-                    i = i + 1
-                if self.writing_address >= minimal_address - 4:
-                    print("data mixed with code ldr 1")
-                    maximum_address = max([register.ldr_data_address for register in self.new_def_registers])
-                    shift = maximum_address + 4 - self.writing_address
-                    self.writing_address = maximum_address + 4
-                    print("Shift", shift, "writing adress", self.writing_address)
-                    self.remember_shifted_bytes(shift)
-                    self.limit = len(self.new_def_registers) + 1
+            # print("Instruction address", instruction_patch.address, "End address", end_address, "CHEck fir data 2")
+            # shift_address = self.writing_address
+            # self.writing_address = self.writing_address + instruction_patch.size
+            # # # self.remember_shifted_bytes(instruction_patch.size)
+            # if len(self.new_def_registers) >= self.limit:
+            #     minimal_address = self.new_def_registers[self.limit - 1].ldr_data_address
+            #     i = self.limit
+            #     while i < len(self.new_def_registers):
+            #         if self.new_def_registers[i].ldr_data_address <= minimal_address:
+            #             minimal_address = self.new_def_registers[i].ldr_data_address
+            #         i = i + 1
+            #     if self.writing_address >= minimal_address - 4:
+            #         print("data mixed with code ldr 1d")
+            #         maximum_address = max([register.ldr_data_address for register in self.new_def_registers])
+            #         shift = minimal_address - shift_address
+            #         self.writing_address = maximum_address + 4
+            #         print("Shift", shift, "writing adress", self.writing_address)
+            #         self.remember_shifted_bytes(shift)
+            #         self.limit = len(self.new_def_registers) + 1
+            print("Hallo2")
             return end_address
         else:
             end_address = instruction_patch.address
