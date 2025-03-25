@@ -37,7 +37,7 @@ class ConstraintSolver:
         assert None not in self._vex_expr_handlers
         assert None not in self._vex_stmt_handlers
 
-    def solve(self, slice, jump_target, writing_address, variable, written_registers):
+    def solve(self, slice, jump_target, writing_address, variable, written_registers, cfge_patch_specific):
         """
         Running the SMTSolver with the Slice of a Control Flow graph and the jump target
         :param slice: The slice of the Control Flow Graph
@@ -52,7 +52,8 @@ class ConstraintSolver:
         self.variable = variable
         # Iterating over the instruction addresses in the slice
         for address, ids in sorted(slice.items()):
-            block = self.project.factory.block(address, size=75)
+            block = cfge_patch_specific.project.factory.block(address)
+            # , size = 75
             block.pp()
             print("Address", hex(address))
             # nodes = self.project.kb.cfgs.cfgs["CFGEmulated"].get_all_nodes(address)
