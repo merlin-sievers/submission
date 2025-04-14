@@ -6,7 +6,7 @@ from angr import AngrBackwardSlicingError
 from angr.analyses import BackwardSlice
 from angr.analyses.ddg import ProgramVariable
 from angr.code_location import CodeLocation
-from angr.sim_variable import SimTemporaryVariable
+from angr.sim_variable import SimTemporaryVariable, SimRegisterVariable
 
 
 class VariableBackwardSlicing(BackwardSlice):
@@ -27,6 +27,7 @@ class VariableBackwardSlicing(BackwardSlice):
         control_flow_slice=False,
         same_function=False,
         no_construct=False,
+        offset=False,
     ):
         """
         Create a backward slice from a specific statement based on provided control flow graph (CFG), control
@@ -84,7 +85,7 @@ class VariableBackwardSlicing(BackwardSlice):
         self.chosen_exits = defaultdict(list)
         # Address of all chosen statements for each SimRun
         self.chosen_statements_addrs = set()
-
+        self.offset = offset
 
         if not no_construct:
             self._construct_default(self._targets, variable)
@@ -163,20 +164,47 @@ class VariableBackwardSlicing(BackwardSlice):
         while defs:
             definition = defs.pop()
             in_edges = self._ddg.data_graph.in_edges(definition, data=True)
-            for src, _, data in in_edges:
-                if "type" in data and data["type"] == "kill":
-                    continue
-                if isinstance(src.variable, SimTemporaryVariable):
-                    if src not in traversed:
-                        defs.append(src)
-                        traversed.add(src)
-                        self.chosen_statements_addrs.add(src.location.ins_addr)
-                        self._pick_statement(src.location.block_addr, src.location.stmt_idx, src.location.ins_addr)
-                else:
-                    if src not in sources:
-                        sources.append(src)
-                        self.chosen_statements_addrs.add(src.location.ins_addr)
-                        self._pick_statement(src.location.block_addr, src.location.stmt_idx, src.location.ins_addr)
+            if self.offset:
+                for src, _, data in in_edges:
+                    # if "type" in data and data["type"] == "kill":
+                    #     continue
+                    if isinstance(src.variable, SimTemporaryVariable):
+                        if src not in traversed:
+                            defs.append(src)
+                            traversed.add(src)
+                            self.chosen_statements_addrs.add(src.location.ins_addr)
+                            self._pick_statement(src.location.block_addr, src.location.stmt_idx, src.location.ins_addr)
+                    elif isinstance(src.variable, SimRegisterVariable):
+                        if src.variable not in traversed:
+                            defs.append(src)
+                            traversed.add(src.variable)
+                            if src.variable not in sources:
+                                sources.append(src.variable)
+                            self.chosen_statements_addrs.add(src.location.ins_addr)
+                            self._pick_statement(src.location.block_addr, src.location.stmt_idx, src.location.ins_addr)
+
+                    # else:
+                    #     if src not in sources:
+                    #         sources.append(src)
+                    #         self.chosen_statements_addrs.add(src.location.ins_addr)
+                    #         self._pick_statement(src.location.block_addr, src.location.stmt_idx, src.location.ins_addr)
+            else:
+                for src, _, data in in_edges:
+                    if "type" in data and data["type"] == "kill":
+                        continue
+                    if isinstance(src.variable, SimTemporaryVariable):
+                        if src.variable not in traversed:
+                            defs.append(src)
+                            traversed.add(src.variable)
+                            self.chosen_statements_addrs.add(src.location.ins_addr)
+                            self._pick_statement(src.location.block_addr, src.location.stmt_idx,
+                                                     src.location.ins_addr)
+                    else:
+                        if src.variable not in sources:
+                            sources.append(src.variable)
+                            self.chosen_statements_addrs.add(src.location.ins_addr)
+                            self._pick_statement(src.location.block_addr, src.location.stmt_idx,
+                                                     src.location.ins_addr)
 
 
 

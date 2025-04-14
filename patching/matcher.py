@@ -181,6 +181,8 @@ class RefMatcher:
 
         refs = project.analyses.XRefs(func=address)
 
+        print("Refs", len(refs.kb.xrefs.xrefs_by_ins_addr), address)
+
         if refs is None:
             return self.address_to_refs
 

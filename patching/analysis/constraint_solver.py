@@ -5,7 +5,7 @@ from angr.sim_variable import SimTemporaryVariable
 
 # Assumptions Vex is only in SSA Form inside of a basic block.
 class ConstraintSolver:
-    def __init__(self, project, start_address, ip_address=None):
+    def __init__(self, project, start_address, new_def_registers, ip_address=None,):
         self.project = project
         self.ctx = z3.Context()
         self.solver = z3.Solver()
@@ -22,7 +22,7 @@ class ConstraintSolver:
         self.__init_handlers()
 
         self.ip_address = ip_address
-
+        self.new_def_registers = new_def_registers
 
 
     def __init_handlers(self):
@@ -47,37 +47,140 @@ class ConstraintSolver:
         :param written_registers: The registers that are used in the slice that already have an assigned value
         """
         results = []
-        i = 0
+        j = 0
         self.basic_block_ssa = "b"
         self.variable = variable
         # Iterating over the instruction addresses in the slice
-        for address, ids in sorted(slice.items()):
-            block = cfge_patch_specific.project.factory.block(address)
+        for address, ids in sorted(list(slice.items())):
+            size = max([id for id, ins_addr in ids])
+            # print("Address", hex(address), "Size", size)
+
+            block = self.project.factory.block(address)
+            vex_block = block.vex
+            statements =vex_block.statements
+            thumb = block.thumb
+            # TODO: Change so that you iterate through all possible basic blocks to find the correct one
+            nodes = cfge_patch_specific.get_all_nodes(address)
+            if len(nodes) >1:
+                print("Oh no")
+                block = self.project.factory.fresh_block(address, size=75)
+            elif (len(vex_block.statements) <= size):
+
+                vex_block = block._vex_engine.lift_vex(
+                    arch=self.project.arch,
+                    clemory=None,
+                    state=None,
+                    insn_bytes=block.bytes,
+                    addr=block.addr,
+                    thumb=True,
+                    extra_stop_points=None,
+                    opt_level=1,
+                    num_inst=None,
+                    traceflags=0,
+                    strict_block_end=None,
+                    collect_data_refs=True,
+                    load_from_ro_regions=False,
+                    cross_insn_opt=True,
+                )
+                for id, ins_addr in sorted(ids):
+                    i = id
+
+                    statements = vex_block.statements
+                    bool = False
+                    while i >= 0:
+                        # print("ID", id, "Ins_addr", ins_addr, "I", i, "Block size", len(vex_block.statements))
+                        help_statement = statements[i]
+                        if help_statement.tag == "Ist_IMark":
+                            if help_statement.addr != (ins_addr -1):
+                                print("Problem")
+                                vex_block = block._vex_engine.lift_vex(
+                    arch=self.project.arch,
+                    clemory=None,
+                    state=None,
+                    insn_bytes=block.bytes,
+                    addr=block.addr,
+                    thumb=True,
+                    extra_stop_points=None,
+                    opt_level=1,
+                    num_inst=None,
+                    traceflags=0,
+                    strict_block_end=None,
+                    collect_data_refs=False,
+                    load_from_ro_regions=False,
+                    cross_insn_opt=True)
+                                bool = True
+                            break
+                        i = i - 1
+                    if bool:
+                        break
+            else:
+                # block = self.project.factory.fresh_block(address, 75)
+                # vex_block = block.vex
+                for id, ins_addr in ids:
+                    i = id
+                    bool = False
+                    while i > 0:
+                        # print("ID", id, "Ins_addr", ins_addr, "I", i, "Block size", len(vex_block.statements))
+
+                        help_statement = statements[i]
+                        if help_statement.tag == "Ist_IMark":
+                            if help_statement.addr != (ins_addr-1):
+                                vex_block = block._vex_engine.lift_vex(
+                                    arch=self.project.arch,
+                                    clemory=None,
+                                    state=None,
+                                    insn_bytes=block.bytes,
+                                    addr=block.addr,
+                                    thumb=True,
+                                    extra_stop_points=None,
+                                    opt_level=1,
+                                    num_inst=None,
+                                    traceflags=0,
+                                    strict_block_end=None,
+                                    collect_data_refs=True,
+                                    load_from_ro_regions=False,
+                                    cross_insn_opt=True,
+                                )
+                                bool = True
+                            break
+                        i = i - 1
+                    if bool:
+                        break
+
+
+
+            # print(len(block.vex.statements), size)
+            # if len(block.vex.statements) <= size:
+            #     block = cfge_patch_specific.project.factory.block(address, size=size)
             # , size = 75
-            block.pp()
-            print("Address", hex(address))
+            # block.pp()
+            # print("Address", hex(address))
             # nodes = self.project.kb.cfgs.cfgs["CFGEmulated"].get_all_nodes(address)
             # largest_node = max(nodes, key=lambda node: node.size)
             # block = largest_node.block
 
 
-            self.basic_block_ssa = str(i) + "b"
-            i = i+1
+            self.basic_block_ssa = str(j) + "b"
+            j = j+1
+            # print(len(block.vex.statements), size)
+
             # Now iterate over the vex statements of the instruction
             for id, ins_addr in sorted(ids):
 
-                if block.thumb:
+                if thumb:
                     ins_addr = ins_addr - 1
             #TODO BAD HACK CHANGE IT!!!
-                if(len(block.vex.statements) > id):
-                    statement = block.vex.statements[id]
+                if(len(vex_block.statements) > id):
+                    statement = vex_block.statements[id]
                 else:
                     print("it happened again")
                     continue
 
                 if self.handle_vex_statement(statement, ins_addr, writing_address):
                     # To debug solver we need to push the assertions
-                    # self.solver.push()
+
+                    print("Statement", statement)
+
                     continue
                 else:
                     break
@@ -90,14 +193,17 @@ class ConstraintSolver:
         if self.variables == []:
             return None
 
+
+
+
         if isinstance(variable, SimTemporaryVariable):
 
-            for k in range(i, -1, -1):
+            for k in range(j, -1, -1):
                 register = z3.BitVec("t" + str(k) + "b" + str(variable.tmp_id), 32)
                 if register in self.variables:
                     break
         else:
-            for k in range(i, -1, -1):
+            for k in range(j, -1, -1):
                 register = z3.BitVec("r" + str(k) + "b" + str(variable.reg), 32)
                 if register in self.variables:
                     break
@@ -107,6 +213,17 @@ class ConstraintSolver:
         if len(self.used_registers) == 0:
             self.used_registers.append(register)
 
+        # if self.new_def_registers is not None:
+        #     for reg in self.new_def_registers:
+        #         string = "r" + str(self.project.arch.registers[reg.register_name][0])
+        #         print("Register Name", string)
+        #         register = z3.BitVec(string, 32)
+        #         if register in self.variables:
+        #             new_target = z3.BitVecVal(reg.ldr_data_address, 32)
+        #             # register =  z3.BitVec(string, 32)
+        #             self.solver.add(register == new_target)
+
+        print("Last Constraint", self.used_registers[0], "==", new_target)
 
         self.solver.add(self.used_registers[0] == new_target)
 
@@ -117,7 +234,7 @@ class ConstraintSolver:
             expr = z3.BitVecVal(written_registers[reg], 32)
             self.solver.add(var == expr)
 
-
+        print("Solver", self.solver)
         if self.solver.check() == z3.sat:
         # Get the model
             print("solvable")
@@ -127,11 +244,11 @@ class ConstraintSolver:
         #         relevantRegister = itReg
         #     for equation in self.solver.assertions():
                 # print("\n\t", equation)
-
+            print("Model", model)
             for decl in model.decls():
 
                 variable = model.eval(decl(), True)
-                # print("var\n\t", decl, variable)
+                print("var\n\t", decl, variable)
                 result = (decl, variable)
                 results.append(result)
 
@@ -197,9 +314,11 @@ class ConstraintSolver:
 
 
     def _handle_vex_stmt_PutI(self, statement, address, writing_address):
+        print("PutI", statement)
         pass
 
     def _handle_vex_stmt_Store(self, statement, address, writing_address):
+        print("Store", statement)
         pass
 
     def _handle_vex_stmt_LoadG(self, statement, address, writing_address):
@@ -216,21 +335,38 @@ class ConstraintSolver:
         return True
 
     def _handle_vex_stmt_StoreG(self, statement, address, writing_address):
+        # print("StoreG", statement)
+        # if statement.addr.tag_int == 11:
+        #     load = z3.BitVec(str(statement.addr), 32)
+        # else:
+        #     load = self._handle_vex_expr(statement.addr, address, writing_address)
+        # alt = self._handle_vex_expr(statement.data, address, writing_address)
+        # guard = self._handle_vex_expr(statement.guard, address, writing_address)
+        # tmp = z3.BitVec("t" + self.basic_block_ssa + str(statement.end), 32)
+        # condition = z3.If(guard != 0, load, alt)
+        # self.variables.append(tmp)
+        # self.solver.add(tmp == condition)
+        # return True
         pass
 
     def _handle_vex_stmt_CAS(self, statement, address, writing_address):
+        print("CAS", statement)
         pass
 
     def _handle_vex_stmt_LLSC(self, statement, address, writing_address):
+        print("LLSC", statement)
         pass
 
     def _handle_vex_stmt_Dirty(self, statement, address, writing_address):
+        print("Dirty", statement)
         pass
 
     def _handle_vex_stmt_MBE(self, statement, address, writing_address):
+        print("MBE", statement)
         pass
 
     def _handle_vex_stmt_Exit(self, statement, address, writing_address):
+        print("Exit", statement)
         pass
 
 
@@ -240,16 +376,20 @@ class ConstraintSolver:
 
 
     def _handle_vex_expr_Binder(self, expression, address, writing_address):
+        print("Binder", expression)
         pass
 
     def _handle_vex_expr_Get(self, expression, address, writing_address):
         register = z3.BitVec("r" + str(expression.offset), 32)
         if register in self.register_ssa:
             register = self.register_ssa[register][-1]
+        else:
+            self.register_ssa[register] = [register]
         self.variables.append(register)
         return register
 
     def _handle_vex_expr_GetI(self, expression, address, writing_address):
+        print("GetI", expression)
         pass
 
     def _handle_vex_expr_RdTmp(self, expression, address, writing_address):
@@ -257,9 +397,11 @@ class ConstraintSolver:
         self.variables.append(variable)
         return variable
     def _handle_vex_expr_Qop(self, expression, address, writing_address):
+        print("Qop", expression)
         pass
 
     def _handle_vex_expr_Triop(self, expression, address, writing_address):
+        print("Triop", expression)
         pass
 
     def _handle_vex_expr_Binop(self, expression, address, writing_address):
@@ -269,29 +411,36 @@ class ConstraintSolver:
         self.variables.append(op2)
         if expression.op == "Iop_Add32":
             expr = op1 + op2
+            print("HERE IS ADDItion", expression, op1, op2)
             return expr
         if expression.op == "Iop_CmpNE32":
             expr = op1 - op2
             return expr
         if expression.op == "Iop_And32":
             expr = op1 & op2
-            return expr
+            return None
         if expression.op == "Iop_Or32":
             expr = op1 | op2
             return expr
         if expression.op == "Iop_Shr32":
             expr = z3.LShR(op1, op2)
+            # expr = op1
             return expr
         if expression.op == "Iop_Xor32":
             expr = op1 ^ op2
-            return expr
+            return None
 
 
     def _handle_vex_expr_Unop(self, expression, address, writing_address):
+        print("Unop", expression)
         pass
 
     def _handle_vex_expr_Load(self, expression, address, writing_address):
-        load = z3.BitVec(str(expression.addr), 32)
+        if expression.addr.tag == "Iex_Const":
+            load = z3.BitVec(str(expression.addr), 32)
+        else:
+            load = z3.BitVec("t" + self.basic_block_ssa + str(expression.addr.tmp), 32)
+        # load = z3.BitVec(str(expression.addr), 32)
         self.variables.append(load)
         return load
 
@@ -318,7 +467,9 @@ class ConstraintSolver:
         return expression
 
     def _handle_vex_expr_VECRET(self, expression, address, writing_address):
+        print("VECRET", expression)
         pass
 
     def _handle_vex_expr_GSPTR(self, expression, address, writing_address):
+        print("GSPTR", expression)
         pass

@@ -18,6 +18,7 @@ from patching.section_extender import SectionExtender
 from patching.shifts import Shift
 
 import time
+import logging
 
 
 class FunctionPatch(Patching):
@@ -31,6 +32,8 @@ class FunctionPatch(Patching):
 
 
     def patch_functions(self):
+        logging.getLogger('angr').setLevel(logging.CRITICAL)
+
         initial = FunctionPatch(patching_config=self.patching_config)
         initial.start()
 
@@ -58,7 +61,7 @@ class FunctionPatch(Patching):
 
         self.limit = 1
         # TODO: Hack to extend segment and match afterwards
-        vuln = SectionExtender(self.patching_config.binary_path, 262144).add_section()
+        vuln = SectionExtender(self.patching_config.binary_path, 1048576).add_section()
 
         # TODO: Add path to the binary as an argument for the configuration
         self.project_vuln = angr.Project(vuln, auto_load_libs=False)
@@ -100,12 +103,11 @@ class FunctionPatch(Patching):
         print("\n\t Starting to analyze the patch Program CFGEmul...")
         self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
                                                                            state_add_options=option,
-                                                                           starts=[self.entry_point_patch],
-                                                                           call_depth=2)
+                                                                           starts=[self.entry_point_patch], call_depth=2)
 
         print("\n\t Starting to analyze the patch Program DDG...")
         self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific,
-                                                                  start=self.entry_point_patch, call_depth=1)
+                                                                  start=self.entry_point_patch, call_depth=2)
         # self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
 
     def initial_patch(self):
@@ -145,8 +147,8 @@ class FunctionPatch(Patching):
         self.start_address_of_patch = self.entry_point_vuln
 
         self.code_block_start = self.project_vuln.factory.block(self.start_address_of_patch)
-        # self.code_block_end = self.project_vuln.factory.block(max(vulnerable_blocks))
-        self.code_block_end = self.project_vuln.factory.block(self.end_vuln)
+        self.code_block_end = self.project_vuln.factory.block(max(vulnerable_blocks))
+        # self.code_block_end = self.project_vuln.factory.block(self.end_vuln)
         self.jump_back_address = min(
             [match for match in perfect_matches.match_old_address if match > self.code_block_end.addr], default=None)
 
@@ -155,8 +157,8 @@ class FunctionPatch(Patching):
         self.patch_start_address_of_patch = self.entry_point_patch
 
         self.patch_code_block_start = self.project_patch.factory.block(self.patch_start_address_of_patch)
-        # self.patch_code_block_end = self.project_patch.factory.block(max(patch_blocks))
-        self.patch_code_block_end = self.project_patch.factory.block(self.end_patch)
+        self.patch_code_block_end = self.project_patch.factory.block(max(patch_blocks))
+        # self.patch_code_block_end = self.project_patch.factory.block(self.end_patch)
 
         with open("block.txt", 'a') as error_file:
             error_message = f"BinaryName: {self.patching_config.binary_path} functionName: {self.patching_config.functionName} Function Size:{self.project_patch.loader.find_symbol(self.patching_config.functionName).size}  Patch Size: {self.patch_code_block_end.addr + self.patch_code_block_end.size - self.patch_code_block_start.addr}"
@@ -193,8 +195,8 @@ class FunctionPatch(Patching):
         # TODO: Adaption for adding Segment:
         # for seg in self.project_vuln.loader.main_object.segments:
 
-        new_memory_address = self.backend.project.loader.main_object.segments[1].vaddr
-
+        new_memory_address = self.backend.project.loader.main_object.segments[2].vaddr
+        print("New Memory Address", new_memory_address)
         # TODO: Adaption for monolithic firmware
         # max_offset = 0
         # for segment in self.project_vuln.loader.main_object.segments:
@@ -244,7 +246,7 @@ class FunctionPatch(Patching):
             self.patches = []
             print(self.entry_point_patch)
             self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific,
-                                                                      start=self.entry_point_patch)
+                                                                      start=self.entry_point_patch, call_depth=2)
 
             self.new_def_registers = []
             self.used_registers = dict()
@@ -288,6 +290,7 @@ class FunctionPatch(Patching):
             self.is_thumb = block_patch.thumb
             # Going through every CodeUnit from the BasicBlock
             for instruction_patch in block_patch.capstone.insns:
+
 
                 # TODO: Adapt to work for non-thumb as well
                 end_address = self.check_for_data(instruction_patch, end_address)
@@ -360,13 +363,16 @@ class FunctionPatch(Patching):
             while patch_block_start_address - 1 in self.cfg_patch.memory_data:
                 if patch_block_start_address > self.patch_code_block_end.addr:
                     break
-                print("Data Address", patch_block_start_address)
+                if self.cfg_patch.memory_data[patch_block_start_address - 1].size is None:
+                    break
+                print("Data Address", patch_block_start_address, self.patch_code_block_end.addr, self.cfg_patch.memory_data[patch_block_start_address - 1])
 
-                byte_data = self.project_patch.loader.memory.load(patch_block_start_address - 1,
-                                                                  self.cfg_patch.memory_data[
-                                                                      patch_block_start_address - 1].size)
+
                 self.handle_jump_table(patch_block_start_address)
                 if data_shifter:
+                    byte_data = self.project_patch.loader.memory.load(patch_block_start_address - 1,
+                                                                      self.cfg_patch.memory_data[
+                                                                          patch_block_start_address - 1].size)
                     patches = RawMemPatch(self.writing_address, byte_data)
                     self.patches.append(patches)
                     self.writing_address = self.writing_address + self.cfg_patch.memory_data[
@@ -446,7 +452,7 @@ class FunctionPatch(Patching):
 
         patches = InlinePatch(base_address, "bl " + target_address_str, is_thumb=self.code_block_start.thumb)
         self.patches.append(patches)
-
+        print("Jump to new Memory", base_address, target_address_str)
         patches = InlinePatch(target_address, "mov lr, ip", is_thumb=self.code_block_start.thumb)
         self.patches.append(patches)
 
@@ -585,7 +591,7 @@ class FunctionPatch(Patching):
             self.handle_reference_without_ddg(instruction_patch, reference)
             return
 
-        solver = ConstraintSolver(self.project_patch, instruction_patch.address - 1)
+        solver = ConstraintSolver(self.project_patch, instruction_patch.address - 1, self.new_def_registers)
         # Calculate Address where the value of the PARAM reference need to be written
 
         jump_target = old_reference.toAddr
@@ -600,6 +606,9 @@ class FunctionPatch(Patching):
             subtraction = True
             subtraction_address = reference.fromAddr
         results = solver.solve(backward_slice.chosen_statements, jump_target, self.writing_address, variable.variable, self.used_registers, self.cfge_patch_specific)
+
+        if results is None:
+            return
 
         affected_registers = self.get_affected_registers(results)
 
@@ -948,7 +957,7 @@ class FunctionPatch(Patching):
         #     self.writing_address = self.writing_address + instruction_patch.size
         #     return
 
-        solver = ConstraintSolver(self.project_patch, instruction_patch.address - 1)
+        solver = ConstraintSolver(self.project_patch, instruction_patch.address - 1, self.new_def_registers)
 
         backward_slice = VariableBackwardSlicing(cfg=self.cfge_patch_specific,
                                                  ddg=self.ddg_patch_specific,
@@ -1230,7 +1239,7 @@ class FunctionPatch(Patching):
             thumb = 1
         else:
             thumb = 0
-        solver = ConstraintSolver(self.project_patch, instruction_patch.address - thumb)
+        solver = ConstraintSolver(self.project_patch, instruction_patch.address - thumb, self.new_def_registers)
         # Calculate Address where the value of the PARAM reference need to be written
 
         if new_target is None:
@@ -1251,7 +1260,7 @@ class FunctionPatch(Patching):
                                                  ddg=self.ddg_patch_specific,
                                                  cdg=self.cdg_patch_specific,
                                                  project=self.project_patch,
-                                                 variable=variable, targets=location)
+                                                 variable=variable, targets=location, offset=True)
 
         results = solver.solve(backward_slice.chosen_statements, new_target, self.writing_address,
                                variable.variable, self.used_registers, self.cfge_patch_specific)
@@ -1280,8 +1289,8 @@ class FunctionPatch(Patching):
         # TODO: Check if the max_step value should be more flexible
         cfge_help = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
                                                             state_add_options=angr.sim_options.refs,
-                                                            starts=[block.addr], call_depth=0)
-        ddge_help = self.project_patch.analyses.DDG(cfg=cfge_help, start=block.addr, call_depth=1)
+                                                            starts=[block.addr], call_depth=1)
+        ddge_help = self.project_patch.analyses.DDG(cfg=cfge_help, start=block.addr)
 
         instr_view = ddge_help.view[instruction_patch.address]
         definitions: list = instr_view.definitions
@@ -1308,7 +1317,7 @@ class FunctionPatch(Patching):
             self.writing_address = self.writing_address + instruction_patch.size
             return
 
-        solver = ConstraintSolver(self.project_patch, instruction_patch.address - 1)
+        solver = ConstraintSolver(self.project_patch, instruction_patch.address - 1, self.new_def_registers)
 
         backward_slice = VariableBackwardSlicing(cfg=cfge_help,
                                                  ddg=ddge_help,
@@ -1461,6 +1470,8 @@ class FunctionPatch(Patching):
             if self.cfg_patch.memory_data[instruction_patch.address - 1].sort == "code reference":
                 end_address = instruction_patch.address
                 return end_address
+            if self.cfg_patch.memory_data[instruction_patch.address - 1].size is None:
+                return end_address
             data_shifter = True
             shift_address = self.writing_address
             address = instruction_patch.address
@@ -1571,7 +1582,7 @@ class FunctionPatch(Patching):
     # Static methods
     @staticmethod
     def _reference_outside_of_patch(block_start, block_end, old_reference):
-        if block_start.addr < old_reference.toAddr < block_end.addr + block_end.size:
+        if block_start.addr <= old_reference.toAddr <= block_end.addr + block_end.size:
             return False
         else:
             return True
