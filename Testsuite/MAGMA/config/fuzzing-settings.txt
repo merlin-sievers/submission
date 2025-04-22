@@ -1,4 +1,0 @@
-In Tools/AFLplusplus: 
-        sudo AFL_QEMU_DRIVER_NO_HOOK=1  AFL_SKIP_CPUFREQ=1 QEMU_LD_PREFIX=/usr/arm-linux-gnueabihf/ AFL_DEBUG=1 ./afl-fuzz -i /home/jaenich/FuzzingInput/test/ -o /home/jaenich/FuzzingOutput/pngtest/ -Q /home/jaenich/Magma/magma/targets/libpng/libpng/repo/libpng_read_fuzzer_static > test.log
-        sudo AFL_QEMU_DRIVER_NO_HOOK=1 LD_LIBRARY_PATH=/home/jaenich/Magma/magma/targets/libpng/libpng/repo/vuln_O3/lib/::/usr/local/lib/zlib/lib/ AFL_SKIP_CPUFREQ=1 QEMU_LD_PREFIX=/usr/arm-linux-gnueabihf/ AFL_DEBUG=1 ./afl-fuzz -i /home/jaenich/FuzzingInput/test/ -o /home/jaenich/FuzzingOutput/pngtest/ -Q /home/jaenich/Magma/magma/targets/libpng/libpng/repo/libpng_read_fuzzer
-
