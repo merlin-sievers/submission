@@ -1,34 +1,67 @@
 import configparser
 import sqlite3
-
+import json
 
 class Config:
 
-    def __init__(self, path, section):
+    def __init__(self):
         """
         This class contains all the configuration parameters for the patching process
         :param functionName:     String
         :param sql_path:         String
         :param binary_path:      String
         """
-        config = configparser.ConfigParser()
+
         self.functionName = None
-        self.sql_path = None
         self.binary_path = None
         self.patch_path = None
+        self.output_path = None
+
+
+    def readMagmaConfig(self, path, section):
         try:
             # Read the configuration file
+            config = configparser.ConfigParser()
             config.read(path)
 
             # Get values from the configuration file
             self.functionName = config.get(section, "function.name")
             print("Hallo", self.functionName)
-            self.sql_path = config.get(section, "SQL.path")
             self.binary_path = config.get(section, "binary.path")
             self.patch_path = config.get(section, "patch.path")
             self.output_path = config.get(section, "output.path")
         except configparser.Error as e:
             print("Error reading configuration:", e)
+
+    def readJsonConfig(self, json_path):
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+
+        results = []
+
+        for entry in data:
+            version = entry.get("version")
+            patched_version = entry.get("patched_version")
+            product = entry.get("product")
+            cve = entry.get("cve")
+            instances = entry.get("instances", [])
+
+            for instance in instances:
+                results.append({
+                    "product": product,
+                    "cve": cve,
+                    "affected_version": version,
+                    "patched_version": patched_version,
+                    "affected_path": instance.get("affected_path"),
+                    "patched_path": instance.get("patched_path"),
+                    "toolchain": instance.get("toolchain"),
+                    "test_dir": instance.get("test_dir")
+                })
+
+        return results
+
+
+
 
     def openBindiffResults(self):
 
@@ -65,3 +98,5 @@ class Config:
             # Close the cursor and connection
             cursor.close()
             connection.close()
+
+
