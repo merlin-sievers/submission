@@ -15,7 +15,7 @@ from elftools.elf.elffile import ELFFile
 from elftools.elf.sections import Section
 
 from patching.configuration import Config
-from patching.patching import Patching
+from patching.function import FunctionPatch
 
 import logging
 
@@ -38,16 +38,16 @@ def timeout_handler(signum, frame):
 signal.signal(signal.SIGALRM, timeout_handler)
 
 def run_patching(config_path):
-    i = 1
-    while i <= 54:
+    i = 23
+    while i <= 23:
         config = Config(config_path, str(i))
 
         # Set the alarm for 20 minutes (1200 seconds)
         signal.alarm(4400)
 
         try:
-            patching = Patching(config)
-            patching.patch(config.binary_path)
+            patching = FunctionPatch(config)
+            patching.patch_functions()
             # Disable the alarm if patching is successful
             signal.alarm(0)
         except TimeoutException as te:
@@ -68,10 +68,10 @@ def run_patching(config_path):
     print("Patching completed successfully")
 
 if __name__ == "__main__":
-    num_processes = 3  # Adjust based on available CPU cores or required configs
+    num_processes = 1  # Adjust based on available CPU cores or required configs
     indices = range(num_processes)  # Create different configurations (e.g., 0, 1, 2, 3)
-    config_path = ["unit-test-O1.properties", "unit-test-O2.properties", "unit-test-O3.properties"]
-
+    config_path = ["unit-test-O1.properties",  "unit-test-O3.properties"]
+    # / ","unit-test-O2.properties"
 
     with multiprocessing.Pool(processes=num_processes) as pool:
         pool.map(run_patching, config_path)
