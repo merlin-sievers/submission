@@ -1,6 +1,6 @@
 import pyvex.stmt
 import z3
-from angr.sim_variable import SimTemporaryVariable
+from angr.sim_variable import SimTemporaryVariable, SimRegisterVariable, SimMemoryVariable
 
 
 # Assumptions Vex is only in SSA Form inside of a basic block.
@@ -23,7 +23,7 @@ class ConstraintSolver:
 
         self.ip_address = ip_address
         self.new_def_registers = new_def_registers
-
+        self.written_registers = []
 
     def __init_handlers(self):
         self._vex_expr_handlers = [None] * pyvex.expr.tag_count
@@ -50,6 +50,7 @@ class ConstraintSolver:
         j = 0
         self.basic_block_ssa = "b"
         self.variable = variable
+        self.written_registers = written_registers
         # Iterating over the instruction addresses in the slice
         for address, ids in sorted(list(slice.items())):
             size = max([id for id, ins_addr in ids])
@@ -59,6 +60,7 @@ class ConstraintSolver:
             vex_block = block.vex
             statements =vex_block.statements
             thumb = block.thumb
+
             # TODO: Change so that you iterate through all possible basic blocks to find the correct one
             nodes = cfge_patch_specific.get_all_nodes(address)
             if len(nodes) >1:
@@ -72,7 +74,7 @@ class ConstraintSolver:
                     state=None,
                     insn_bytes=block.bytes,
                     addr=block.addr,
-                    thumb=True,
+                    thumb=thumb,
                     extra_stop_points=None,
                     opt_level=1,
                     num_inst=None,
@@ -89,9 +91,11 @@ class ConstraintSolver:
                     bool = False
                     while i >= 0:
                         # print("ID", id, "Ins_addr", ins_addr, "I", i, "Block size", len(vex_block.statements))
+                        if thumb:
+                            ins_addr = ins_addr - 1
                         help_statement = statements[i]
                         if help_statement.tag == "Ist_IMark":
-                            if help_statement.addr != (ins_addr -1):
+                            if help_statement.addr != (ins_addr):
                                 print("Problem")
                                 vex_block = block._vex_engine.lift_vex(
                     arch=self.project.arch,
@@ -99,7 +103,7 @@ class ConstraintSolver:
                     state=None,
                     insn_bytes=block.bytes,
                     addr=block.addr,
-                    thumb=True,
+                    thumb=thumb,
                     extra_stop_points=None,
                     opt_level=1,
                     num_inst=None,
@@ -121,17 +125,18 @@ class ConstraintSolver:
                     bool = False
                     while i > 0:
                         # print("ID", id, "Ins_addr", ins_addr, "I", i, "Block size", len(vex_block.statements))
-
+                        if thumb:
+                            ins_addr = ins_addr - 1
                         help_statement = statements[i]
                         if help_statement.tag == "Ist_IMark":
-                            if help_statement.addr != (ins_addr-1):
+                            if help_statement.addr != (ins_addr):
                                 vex_block = block._vex_engine.lift_vex(
                                     arch=self.project.arch,
                                     clemory=None,
                                     state=None,
                                     insn_bytes=block.bytes,
                                     addr=block.addr,
-                                    thumb=True,
+                                    thumb=thumb,
                                     extra_stop_points=None,
                                     opt_level=1,
                                     num_inst=None,
@@ -202,13 +207,16 @@ class ConstraintSolver:
                 register = z3.BitVec("t" + str(k) + "b" + str(variable.tmp_id), 32)
                 if register in self.variables:
                     break
-        else:
+        elif isinstance(variable, SimRegisterVariable):
             for k in range(j, -1, -1):
                 register = z3.BitVec("r" + str(k) + "b" + str(variable.reg), 32)
                 if register in self.variables:
                     break
                 else:
                     register = z3.BitVec("r" + str(variable.reg), 32)
+        elif isinstance(variable, SimMemoryVariable):
+            register = self.variables[-1]
+
 
         if len(self.used_registers) == 0:
             self.used_registers.append(register)
@@ -336,17 +344,15 @@ class ConstraintSolver:
 
     def _handle_vex_stmt_StoreG(self, statement, address, writing_address):
         # print("StoreG", statement)
-        # if statement.addr.tag_int == 11:
-        #     load = z3.BitVec(str(statement.addr), 32)
-        # else:
-        #     load = self._handle_vex_expr(statement.addr, address, writing_address)
-        # alt = self._handle_vex_expr(statement.data, address, writing_address)
-        # guard = self._handle_vex_expr(statement.guard, address, writing_address)
-        # tmp = z3.BitVec("t" + self.basic_block_ssa + str(statement.end), 32)
-        # condition = z3.If(guard != 0, load, alt)
-        # self.variables.append(tmp)
-        # self.solver.add(tmp == condition)
-        # return True
+        if statement.addr.tag_int == 11:
+            load = z3.BitVec(str(statement.addr), 32)
+        else:
+            load = self._handle_vex_expr(statement.addr, address, writing_address)
+        alt = self._handle_vex_expr(statement.data, address, writing_address)
+
+        self.variables.append(load)
+        self.solver.add(load == alt)
+        return True
         pass
 
     def _handle_vex_stmt_CAS(self, statement, address, writing_address):
@@ -447,8 +453,13 @@ class ConstraintSolver:
     # TODO: Validate that i consider every constant bigger than 20000 to be an address//  Could use the entry point of the program here...
     def _handle_vex_expr_Const(self, expression, address, writing_address):
         new_address = expression.con.value + writing_address - self.start_address
+
         if expression.con.value > 20000:
             expr = z3.BitVecVal(new_address, 32)
+            for reg in self.written_registers:
+                if self.written_registers[reg] == expression.con.value:
+                    expr = z3.BitVec(str(hex(expression.con.value)), 32)
+                    self.variables.append(expr)
         else:
             expr = z3.BitVecVal(expression.con.value, 32)
         return expr

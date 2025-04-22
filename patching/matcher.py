@@ -124,6 +124,16 @@ class RefMatcher:
                         new_ref = Reference(ref.fromAddr, project_vuln.loader.main_object.plt[name], ref.refType)
                         self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
                         self.match_to_old_address.setdefault(project_vuln.loader.main_object.plt[name], []).append(ref)
+                elif ref.toAddr+3 in project_patch.loader.main_object.reverse_plt:
+                    name = project_patch.loader.main_object.reverse_plt[ref.toAddr + 3]
+                    if name in project_vuln.loader.main_object.plt:
+                        new_ref = Reference(ref.fromAddr, project_vuln.loader.main_object.plt[name], ref.refType)
+                        if ref.refType == "control_flow_jump":
+                            self.match_to_new_address[ref.toAddr] = [new_ref]
+                            self.match_to_old_address[project_vuln.loader.main_object.plt[name]] = [new_ref]
+                        else:
+                            self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
+                            self.match_to_old_address.setdefault(project_vuln.loader.main_object.plt[name], []).append(ref)
 
                 symbol = project_patch.loader.find_symbol(ref.toAddr)
                 if symbol is not None:

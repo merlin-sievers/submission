@@ -3,7 +3,7 @@ import re
 import pickle
 import os
 import angr
-from angr.sim_variable import SimRegisterVariable, SimTemporaryVariable
+from angr.sim_variable import SimRegisterVariable, SimTemporaryVariable, SimMemoryVariable
 
 from patcherex.patches import *
 from patching.patching import Patching
@@ -29,6 +29,7 @@ class FunctionPatch(Patching):
     def __init__(self, patching_config):
         super().__init__(patching_config)
         self.worklist = True
+        self.thumb = 0
 
 
     def patch_functions(self):
@@ -103,11 +104,11 @@ class FunctionPatch(Patching):
         print("\n\t Starting to analyze the patch Program CFGEmul...")
         self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
                                                                            state_add_options=option,
-                                                                           starts=[self.entry_point_patch], call_depth=2)
+                                                                           starts=[self.entry_point_patch])
 
         print("\n\t Starting to analyze the patch Program DDG...")
         self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific,
-                                                                  start=self.entry_point_patch, call_depth=2)
+                                                                  start=self.entry_point_patch)
         # self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
 
     def initial_patch(self):
@@ -157,6 +158,7 @@ class FunctionPatch(Patching):
         self.patch_start_address_of_patch = self.entry_point_patch
 
         self.patch_code_block_start = self.project_patch.factory.block(self.patch_start_address_of_patch)
+
         self.patch_code_block_end = self.project_patch.factory.block(max(patch_blocks))
         # self.patch_code_block_end = self.project_patch.factory.block(self.end_patch)
 
@@ -164,8 +166,10 @@ class FunctionPatch(Patching):
             error_message = f"BinaryName: {self.patching_config.binary_path} functionName: {self.patching_config.functionName} Function Size:{self.project_patch.loader.find_symbol(self.patching_config.functionName).size}  Patch Size: {self.patch_code_block_end.addr + self.patch_code_block_end.size - self.patch_code_block_start.addr}"
             error_file.write(error_message + '\n')
 
+        self.is_thumb = self.patch_code_block_start.thumb
 
-
+        if self.is_thumb:
+            self.thumb = 1
         # Calculate the elapsed time
 
 
@@ -216,14 +220,17 @@ class FunctionPatch(Patching):
               self.patch_code_block_end.addr - self.patch_code_block_start.addr)
         if self.code_block_start.thumb:
             self.start_address_of_patch = self.start_address_of_patch - 1
+        if self.patch_code_block_start.thumb:
             patch = self.patch_start_address_of_patch - 1
             if (new_memory_address % 4) == (patch % 4):
                 new_memory_address = new_memory_address + 2
 
         self.jump_to_new_memory(self.start_address_of_patch, new_memory_address, self.patch_start_address_of_patch)
         # TODO: Check and update for thumb and not thumb
-        new_memory_address = new_memory_address + 2
-
+        if self.is_thumb:
+            new_memory_address = new_memory_address + 2
+        else:
+            new_memory_address = new_memory_address + 4
         self.writing_address = new_memory_address
 
 
@@ -326,7 +333,8 @@ class FunctionPatch(Patching):
                     if self.writing_address >= minimal_address - 4:
                         print("data mixed with code ldr 1a")
                         maximum_address = max([register.ldr_data_address for register in self.new_def_registers])
-                        shift = minimal_address - self.writing_address
+                        # shift = minimal_address - self.writing_address
+                        shift = maximum_address + 4 - self.writing_address
                         self.writing_address = maximum_address + 4
                         print("Shift", shift, "writing adress", self.writing_address)
                         self.remember_shifted_bytes(shift)
@@ -360,33 +368,33 @@ class FunctionPatch(Patching):
             patch_block_start_address = patch_block_start_address + block_patch.size
             data_shifter = True
             shift_address = self.writing_address
-            while patch_block_start_address - 1 in self.cfg_patch.memory_data:
+            while patch_block_start_address - self.thumb in self.cfg_patch.memory_data:
                 if patch_block_start_address > self.patch_code_block_end.addr:
                     break
-                if self.cfg_patch.memory_data[patch_block_start_address - 1].size is None:
+                if self.cfg_patch.memory_data[patch_block_start_address - self.thumb].size is None:
                     break
-                print("Data Address", patch_block_start_address, self.patch_code_block_end.addr, self.cfg_patch.memory_data[patch_block_start_address - 1])
+                print("Data Address", patch_block_start_address, self.patch_code_block_end.addr, self.cfg_patch.memory_data[patch_block_start_address - self.thumb])
 
 
                 self.handle_jump_table(patch_block_start_address)
                 if data_shifter:
-                    byte_data = self.project_patch.loader.memory.load(patch_block_start_address - 1,
+                    byte_data = self.project_patch.loader.memory.load(patch_block_start_address - self.thumb,
                                                                       self.cfg_patch.memory_data[
-                                                                          patch_block_start_address - 1].size)
+                                                                          patch_block_start_address - self.thumb].size)
                     patches = RawMemPatch(self.writing_address, byte_data)
                     self.patches.append(patches)
                     self.writing_address = self.writing_address + self.cfg_patch.memory_data[
-                        patch_block_start_address - 1].size
-                if self.cfg_patch.memory_data[patch_block_start_address - 1].size < 1:
+                        patch_block_start_address - self.thumb].size
+                if self.cfg_patch.memory_data[patch_block_start_address - self.thumb].size < 1:
                     break
 
                 patch_block_start_address = patch_block_start_address + self.cfg_patch.memory_data[
-                    patch_block_start_address - 1].size
+                    patch_block_start_address - self.thumb].size
                 # if self.writing_address >= self.new_memory_writing_address:
                 #     print("data mixed with code")
                 # el
                 if len(self.new_def_registers) >= self.limit:
-                    minimal_address = self.new_def_registers[self.limit - 1].ldr_data_address
+                    minimal_address = self.new_def_registers[self.limit - self.thumb].ldr_data_address
                     i = self.limit
                     while i < len(self.new_def_registers):
                         if self.new_def_registers[i].ldr_data_address <= minimal_address:
@@ -446,14 +454,20 @@ class FunctionPatch(Patching):
         # """
         patches = InlinePatch(base_address, "mov ip, lr", is_thumb=self.code_block_start.thumb)
         self.patches.append(patches)
-        base_address = base_address + 2
+        if self.code_block_start.thumb:
+            base_address = base_address + 2
+        else:
+            base_address = base_address + 4
 
-        target_address_str = str(hex(target_address))
+        target_address_str = str(hex(target_address + 1))
+        if not self.code_block_start.thumb and self.is_thumb:
+            patches = InlinePatch(base_address, "blx " + target_address_str, is_thumb=self.code_block_start.thumb)
+        else:
+            patches = InlinePatch(base_address, "bl " + target_address_str, is_thumb=self.code_block_start.thumb)
 
-        patches = InlinePatch(base_address, "bl " + target_address_str, is_thumb=self.code_block_start.thumb)
         self.patches.append(patches)
         print("Jump to new Memory", base_address, target_address_str)
-        patches = InlinePatch(target_address, "mov lr, ip", is_thumb=self.code_block_start.thumb)
+        patches = InlinePatch(target_address, "mov lr, ip", is_thumb=self.patch_code_block_start.thumb)
         self.patches.append(patches)
 
         # self.backend.apply_patches(patches)
@@ -591,7 +605,7 @@ class FunctionPatch(Patching):
             self.handle_reference_without_ddg(instruction_patch, reference)
             return
 
-        solver = ConstraintSolver(self.project_patch, instruction_patch.address - 1, self.new_def_registers)
+        solver = ConstraintSolver(self.project_patch, instruction_patch.address - self.thumb, self.new_def_registers)
         # Calculate Address where the value of the PARAM reference need to be written
 
         jump_target = old_reference.toAddr
@@ -806,6 +820,11 @@ class FunctionPatch(Patching):
         else:
             new_string = self.replace_jump_target_address(instruction_patch, target_address)
 
+        if not self.code_block_start.thumb and self.is_thumb:
+            new_string = new_string.replace("b ", "bx ")
+            new_string = new_string.replace("bl ", "blx ")
+
+
         patches = InlinePatch(writing_address, new_string, is_thumb=self.is_thumb)
         self.patches.append(patches)
         # Return if the instruction has changed or not to know if we need to add a nop
@@ -947,6 +966,11 @@ class FunctionPatch(Patching):
                         if maximum < definition._variable.location.stmt_idx:
                             maximum = definition._variable.location.stmt_idx
                             variable = definition._variable
+                    elif isinstance(definition._variable.variable, SimMemoryVariable):
+                        if maximum < definition._variable.location.stmt_idx:
+                            maximum = definition._variable.location.stmt_idx
+                            variable = definition._variable
+
         if variable is None:
             self.handle_reference_without_ddg(instruction_patch, reference)
             return
@@ -957,7 +981,7 @@ class FunctionPatch(Patching):
         #     self.writing_address = self.writing_address + instruction_patch.size
         #     return
 
-        solver = ConstraintSolver(self.project_patch, instruction_patch.address - 1, self.new_def_registers)
+        solver = ConstraintSolver(self.project_patch, instruction_patch.address - self.thumb, self.new_def_registers)
 
         backward_slice = VariableBackwardSlicing(cfg=self.cfge_patch_specific,
                                                  ddg=self.ddg_patch_specific,
@@ -1317,7 +1341,7 @@ class FunctionPatch(Patching):
             self.writing_address = self.writing_address + instruction_patch.size
             return
 
-        solver = ConstraintSolver(self.project_patch, instruction_patch.address - 1, self.new_def_registers)
+        solver = ConstraintSolver(self.project_patch, instruction_patch.address - self.thumb, self.new_def_registers)
 
         backward_slice = VariableBackwardSlicing(cfg=cfge_help,
                                                  ddg=ddge_help,
@@ -1382,8 +1406,8 @@ class FunctionPatch(Patching):
                 # Checking if Instruction would change size, if so solve this via indirection, i.e. jumping into the space after the jump into new memory
 
                 offset = 0
-                base = ref.fromAddr - 1 - self.project_patch.loader.min_addr
-                target_address = self.writing_address - ref.fromAddr - 1 - offset
+                base = ref.fromAddr - self.thumb - self.project_patch.loader.min_addr
+                target_address = self.writing_address - ref.fromAddr - self.thumb - offset
                 instruction = self.project_vuln.factory.block(ref.fromAddr).disassembly.insns[0]
                 print("Ref into patch", ref.fromAddr, ref.toAddr, ref.refType, instruction)
                 if instruction.mnemonic in {"ldr", "ldr.w", "ldrb", "ldrb.w", "ldrh", "ldrh.w"}:
@@ -1391,7 +1415,7 @@ class FunctionPatch(Patching):
                 if instruction.size == 2:
 
                     new_string = self.replace_jump_target_address(instruction, self.indirection_address)
-                    patch = InlinePatch(ref.fromAddr - 1, new_string, is_thumb=self.code_block_start.thumb)
+                    patch = InlinePatch(ref.fromAddr - self.thumb, new_string, is_thumb=self.code_block_start.thumb)
                     self.patches.append(patch)
 
                     target_address = self.writing_address - self.indirection_address
@@ -1411,18 +1435,18 @@ class FunctionPatch(Patching):
                 else:
                     if instruction.mnemonic not in {"bl", "blx", "b", "bx", "cbz", "cbnz"}:
                         offset = 2
-                        base = ref.fromAddr - 1 - self.project_patch.loader.min_addr
-                        target_address = self.writing_address - ref.fromAddr - 1 - offset
+                        base = ref.fromAddr - self.thumb - self.project_patch.loader.min_addr
+                        target_address = self.writing_address - ref.fromAddr - self.thumb - offset
                         if target_address > 0:
                             new_string = instruction.mnemonic + " $+" + str(hex(target_address))
                         else:
                             new_string = instruction.mnemonic + " $" + str(hex(target_address))
                         print("New String", new_string)
                         code = self.backend.compile_asm(new_string, base=base, is_thumb=self.is_thumb)
-                        patch = RawMemPatch(ref.fromAddr - 1, code)
+                        patch = RawMemPatch(ref.fromAddr - self.thumb, code)
                     else:
                         new_string = self.replace_jump_target_address(instruction, self.writing_address)
-                        patch = InlinePatch(ref.fromAddr - 1, new_string, is_thumb=self.is_thumb)
+                        patch = InlinePatch(ref.fromAddr - self.thumb, new_string, is_thumb=self.is_thumb)
                     # new_string = self.replace_jump_target_address(instruction, self.writing_address)
                     # patch = InlinePatch(ref.fromAddr-1, new_string, is_thumb=self.code_block_start.thumb)
 
@@ -1433,7 +1457,7 @@ class FunctionPatch(Patching):
                     # code = self.backend.compile_asm(new_string, base=base, is_thumb=self.is_thumb)
                     # patch = RawMemPatch(ref.fromAddr-1, code)
                     self.patches.append(patch)
-                    shift_reference = Reference(ref.fromAddr - 1, self.writing_address, "control_flow_jump")
+                    shift_reference = Reference(ref.fromAddr - self.thumb, self.writing_address, "control_flow_jump")
                     self.shift_references.append(shift_reference)
 
     # Add the control flow jump reference to new memory and also add the small function that is jumped to to new memory
@@ -1466,22 +1490,22 @@ class FunctionPatch(Patching):
             return end_address
 
 
-        if instruction_patch.address - 1 in self.cfg_patch.memory_data:
-            if self.cfg_patch.memory_data[instruction_patch.address - 1].sort == "code reference":
+        if instruction_patch.address - self.thumb in self.cfg_patch.memory_data:
+            if self.cfg_patch.memory_data[instruction_patch.address - self.thumb].sort == "code reference":
                 end_address = instruction_patch.address
                 return end_address
-            if self.cfg_patch.memory_data[instruction_patch.address - 1].size is None:
+            if self.cfg_patch.memory_data[instruction_patch.address - self.thumb].size is None:
                 return end_address
             data_shifter = True
             shift_address = self.writing_address
             address = instruction_patch.address
-            while address - 1 in self.cfg_patch.memory_data:
+            while address - self.thumb in self.cfg_patch.memory_data:
                 if address > self.patch_code_block_end.addr:
                     break
 
-                byte_data = self.project_patch.loader.memory.load(address - 1,
+                byte_data = self.project_patch.loader.memory.load(address - self.thumb,
                                                                   self.cfg_patch.memory_data[
-                                                                      address - 1].size)
+                                                                      address - self.thumb].size)
                 self.handle_jump_table(address)
                 end_address = address + 4
                 if data_shifter:
@@ -1489,12 +1513,12 @@ class FunctionPatch(Patching):
                     patches = RawMemPatch(self.writing_address, byte_data)
                     self.patches.append(patches)
                     self.writing_address = self.writing_address + self.cfg_patch.memory_data[
-                        address - 1].size
-                if self.cfg_patch.memory_data[address - 1].size < 1:
+                        address - self.thumb].size
+                if self.cfg_patch.memory_data[address - self.thumb].size < 1:
                     break
 
                 address = address + self.cfg_patch.memory_data[
-                    address - 1].size
+                    address - self.thumb].size
                 # if self.writing_address >= self.new_memory_writing_address:
                 #     print("data mixed with code")
                 # el
@@ -1573,7 +1597,7 @@ class FunctionPatch(Patching):
                 fromAddress = self.writing_address
                 self.jump_tables.append(self.writing_address)
                 for jump in jump_table.jumptable_entries:
-                    target = jump - jump_table.jumptable_addr + self.writing_address - 1
+                    target = jump - jump_table.jumptable_addr + self.writing_address - self.thumb
                     shift_reference = Reference(fromAddress, target, "jump_table")
                     print("Jump Table", fromAddress, target)
                     fromAddress = fromAddress + jump_table.jumptable_entry_size

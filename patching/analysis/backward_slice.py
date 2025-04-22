@@ -182,12 +182,11 @@ class VariableBackwardSlicing(BackwardSlice):
                                 sources.append(src.variable)
                             self.chosen_statements_addrs.add(src.location.ins_addr)
                             self._pick_statement(src.location.block_addr, src.location.stmt_idx, src.location.ins_addr)
-
-                    # else:
-                    #     if src not in sources:
-                    #         sources.append(src)
-                    #         self.chosen_statements_addrs.add(src.location.ins_addr)
-                    #         self._pick_statement(src.location.block_addr, src.location.stmt_idx, src.location.ins_addr)
+                    else:
+                        if src not in sources:
+                            sources.append(src)
+                            self.chosen_statements_addrs.add(src.location.ins_addr)
+                            self._pick_statement(src.location.block_addr, src.location.stmt_idx, src.location.ins_addr)
             else:
                 for src, _, data in in_edges:
                     if "type" in data and data["type"] == "kill":
