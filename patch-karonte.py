@@ -55,22 +55,24 @@ def patch(config):
             success_logger.info("Patching completed successfully for binary_path: %s functionName: %s",
                                 config.binary_path, config.functionName)
             signal.alarm(0)
+            return True
         except TimeoutException as te:
             print(f"Operation for config {config.binary_path} timed out", te)
             error_logger.error("Timeout occurred for binary_path: %s functionName: %s", config.binary_path,
                                config.functionName)
-            pass
+
         except Exception as e:
             print("Error occurred while patching:", e)
             error_logger.error("An error occurred: %s binary_path: %s functionName: %s", e, config.binary_path,
                                config.functionName)
-            pass
+
         finally:
             # Ensure the alarm is always disabled after each iteration
             signal.alarm(0)
+            return False
     else:
         error_logger.error("Function name is None for binary_path: %s", config.binary_path)
-
+        return False
 def unit_test_patch(config):
 #     Build the unit tests
     command = f"cd {config.test_dir}"
@@ -104,7 +106,12 @@ def unit_test_patch(config):
 
 def run_command(command, cwd):
     error_logger = get_error_logger("command_error.log")
-    result = subprocess.run(command, shell=True, check=True, capture_output=True, cwd=cwd)
+    try:
+        result = subprocess.run(command, shell=True, check=True, capture_output=True, cwd=cwd)
+    except subprocess.CalledProcessError as e:
+        error_logger.error(f'Command "{command}" failed with error: {e.stderr.decode()}')
+        return False
+
     if result.returncode != 0:
         error_logger.error(f'Failed to run "{command}" in "{cwd}"')
         return False
@@ -136,7 +143,8 @@ def karonte_job(result):
     config.version = result["affected_version"]
     config.firmware = os.path.dirname(config.binary_path)
 
-    patch(config)
+    if not patch(config):
+        return
 
     unit_test_patch(config)
 
