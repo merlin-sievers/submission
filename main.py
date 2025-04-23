@@ -1,6 +1,7 @@
 # import angr, monkeyhex, archinfo
 # import re
 # import lief
+import signal
 # from lief import ELF
 # import logging
 # import claripy
@@ -25,7 +26,7 @@ from patching.function import FunctionPatch
 # from variable_backward_slicing import VariableBackwardSlicing
 import logging
 
-from patchingScript import TimeoutException
+
 
 # config = lief.ELF.ParserConfig()
 #
@@ -41,7 +42,14 @@ from patchingScript import TimeoutException
 # s = lief._lief.ELF
 #
 
+class TimeoutException(Exception):
+    pass
+
+
+def timeout_handler(signum, frame):
+    raise TimeoutException("Operation timed out")
 # import multiprocessing
+signal.signal(signal.SIGALRM, timeout_handler)
 
 config = Config()
 results = config.readJsonConfig("/Users/sebastian/PycharmProjects/cve-bin-tool/NetgearR6200_Test/results.json")

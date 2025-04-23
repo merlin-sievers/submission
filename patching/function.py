@@ -433,10 +433,10 @@ class FunctionPatch(Patching):
         self.backend.apply_patches(self.patches)
 
         # self.backend.save("/Users/sebastian/Public/Arm_65/libpng10.so.0.65.0_detoured")
-        self.backend.save("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test_detoured")
+        self.backend.save(self.patching_config.binary_path + "_vuln_test_detoured")
 
         # Reopen the patched binary to fix the shifts
-        shift_backend = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/vuln_test_detoured",
+        shift_backend = angr.Project(self.patching_config.binary_path + "_vuln_test_detoured",
                                      auto_load_libs=False)
 
         # Jump back to the original function since the patch is now integrated
