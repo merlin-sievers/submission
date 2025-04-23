@@ -92,7 +92,7 @@ def unit_test_patch(config):
         return
 
     command = f"QEMU_LD_PREFIX=/usr/arm-linux-gnueabi/ LD_LIBRARY_PATH=:{config.firmware} make test > test.log 2>&1"
-    if not run_command(command, config.test_dir)
+    if not run_command(command, config.test_dir):
         return
 
 
