@@ -52,9 +52,9 @@ def timeout_handler(signum, frame):
 signal.signal(signal.SIGALRM, timeout_handler)
 
 config = Config()
-results = config.readJsonConfig("/Users/sebastian/PycharmProjects/cve-bin-tool/NetgearR6200_Test/results.json")
+results = config.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results.json")
 name = dict()
-name["CVE-2016-9840"]
+name["CVE-2016-9840"] = "inflate_fast"
 for r in results:
     config.binary_path = r["affected_path"]
     config.patch_path = r["patched_path"]
