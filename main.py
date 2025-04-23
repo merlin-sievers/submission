@@ -1,29 +1,32 @@
-import angr, monkeyhex, archinfo
-import re
-import lief
-from lief import ELF
-import logging
-import claripy
-import networkx
-import time
-from patcherex.backends.detourbackend import DetourBackend
-from angr import AngrBackwardSlicingError, Analysis
-from angr.analyses import BackwardSlice, CFGEmulated
-from angr.code_location import CodeLocation
-from angr.sim_variable import SimRegisterVariable
-from z3 import z3
-from angrutils import plot_cfg
-from patcherex.patches import InlinePatch, AddLabelPatch
-
-from patcherexMM.patcherex.backends import ReassemblerBackend
-from patcherexMM.patcherex.patches import AddSegmentHeaderPatch, AddCodePatch
-from patching.analysis.constraint_solver import ConstraintSolver
+# import angr, monkeyhex, archinfo
+# import re
+# import lief
+# from lief import ELF
+# import logging
+# import claripy
+# import networkx
+# import time
+# from patcherex.backends.detourbackend import DetourBackend
+# from angr import AngrBackwardSlicingError, Analysis
+# from angr.analyses import BackwardSlice, CFGEmulated
+# from angr.code_location import CodeLocation
+# from angr.sim_variable import SimRegisterVariable
+# from z3 import z3
+# from angrutils import plot_cfg
+# from patcherex.patches import InlinePatch, AddLabelPatch
+#
+# from patcherexMM.patcherex.backends import ReassemblerBackend
+# from patcherexMM.patcherex.patches import AddSegmentHeaderPatch, AddCodePatch
+# from patching.analysis.constraint_solver import ConstraintSolver
 from patching.configuration import Config
 from patching.function import FunctionPatch
-from patching.patching import Patching
-from patching.section_extender import SectionExtender
-from variable_backward_slicing import VariableBackwardSlicing
+# from patching.patching import Patching
+# from patching.section_extender import SectionExtender
+# from variable_backward_slicing import VariableBackwardSlicing
 import logging
+
+from patchingScript import TimeoutException
+
 # config = lief.ELF.ParserConfig()
 #
 # # config.parse_dyn_symbols = True
@@ -38,7 +41,7 @@ import logging
 # s = lief._lief.ELF
 #
 
-import multiprocessing
+# import multiprocessing
 
 config = Config()
 results = config.readJsonConfig("/Users/sebastian/PycharmProjects/cve-bin-tool/NetgearR6200_Test/results.json")
