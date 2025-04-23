@@ -157,7 +157,8 @@ if __name__ == "__main__":
 
     with Progress() as progress:
         task = progress.add_task("[cyan]Patching...", total=len(results))
-
+        with suppress_stdout():
+            print("This will be suppressed")
         with multiprocessing.Pool() as pool:
             for _ in pool.imap_unordered(karonte_job, results):
                 progress.update(task, advance=1)
