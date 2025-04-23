@@ -100,7 +100,7 @@ def unit_test_patch(config):
 
 
 def run_command(command, cwd):
-    error_logger = get_error_logger()
+    error_logger = get_error_logger("command_error.log")
     result = subprocess.run(command, shell=True, check=True, capture_output=True, cwd=cwd)
     if result.returncode != 0:
         error_logger.error(f'Failed to run "{command}".')
