@@ -129,9 +129,9 @@ def karonte_job(result):
     config.patch_path = result["patched_path"]
     config.output_path = result["test_dir"] + "/" + result["product"] + "_" + result["cve"] + ".so"
     config.functionName = name[result["cve"]]
-    config.test_dir = result["test_dir"] + "/" + result["product"] + "-" + result["version"]
+    config.test_dir = result["test_dir"] + "/" + result["product"] + "-" + result["affected_version"]
     config.product = result["product"]
-    config.version = result["version"]
+    config.version = result["affected_version"]
     config.firmware = os.path.dirname(config.binary_path)
 
     patch(config)
