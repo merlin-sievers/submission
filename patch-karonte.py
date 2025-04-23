@@ -2,6 +2,7 @@ import multiprocessing
 import os
 import signal
 import subprocess
+import sys
 
 from rich.progress import Progress
 
@@ -128,17 +129,25 @@ def karonte_job(result):
     config.patch_path = result["patched_path"]
     config.output_path = result["test_dir"] + "/" + result["product"] + "_" + result["cve"] + ".so"
     config.functionName = name[result["cve"]]
-    config.test_dir = result["test_dir"]
+    config.test_dir = result["test_dir"] + "/" + result["product"] + "-" + result["version"]
     config.product = result["product"]
-    config.version = result["patched_version"]
+    config.version = result["version"]
     config.firmware = os.path.dirname(config.binary_path)
 
     patch(config)
 
     unit_test_patch(config)
 
-    evaluate_results()
+    evaluate_results(config, config.test_dir)
 
+def suppress_stdout():
+    original_stdout = sys.stdout
+    sys.stdout = open(os.devnull, 'w')
+    try:
+        yield
+    finally:
+        sys.stdout.close()
+        sys.stdout = original_stdout
 
 
 if __name__ == "__main__":
@@ -148,6 +157,7 @@ if __name__ == "__main__":
 
     with Progress() as progress:
         task = progress.add_task("[cyan]Patching...", total=len(results))
+
         with multiprocessing.Pool() as pool:
             for _ in pool.imap_unordered(karonte_job, results):
                 progress.update(task, advance=1)
