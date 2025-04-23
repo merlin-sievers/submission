@@ -52,7 +52,7 @@ def patch(config):
             patching = FunctionPatch(config)
             patching.patch_functions()
             # Disable the alarm if patching is successful
-            success_logger.info(logging.INFO, "Patching completed successfully for binary_path: %s functionName: %s",
+            success_logger.info("Patching completed successfully for binary_path: %s functionName: %s",
                                 config.binary_path, config.functionName)
             signal.alarm(0)
         except TimeoutException as te:
@@ -81,11 +81,12 @@ def unit_test_patch(config):
     if not run_command(command, config.test_dir):
         return
 
-    command = f"CHOST='arm-linux-gnueabi' CFLAGS='-U_TIME_BITS' ./configure --shared"
+    command = f"CC='arm-linux-gnueabi-gcc' ./configure --shared"
     if not run_command(command, config.test_dir):
         return
 
     command = f"make"
+    print(config.test_dir)
     if not run_command(command, config.test_dir):
         return
 
@@ -105,7 +106,7 @@ def run_command(command, cwd):
     error_logger = get_error_logger("command_error.log")
     result = subprocess.run(command, shell=True, check=True, capture_output=True, cwd=cwd)
     if result.returncode != 0:
-        error_logger.error(f'Failed to run "{command}".')
+        error_logger.error(f'Failed to run "{command}" in "{cwd}"')
         return False
     return True
 
@@ -118,18 +119,18 @@ def evaluate_results(config, cwd):
     if result.returncode == 0:
         error_logger.error("Unit test of %s failed", config.output_path)
     else:
-        successor_logger.error("Unit test of %s passed", config.output_path)
-
+        successor_logger.info("Unit test of %s passed", config.output_path)
 
 def karonte_job(result):
     name = dict()
-    name["CVE-2016-9840"] = "inflate_fast"
+    #name["CVE-2016-9840"] = "inflate_fast"
     name["CVE-2016-9841"] = "inflate_table"
     config = Config()
     config.binary_path = result["affected_path"]
     config.patch_path = result["patched_path"]
     config.output_path = result["test_dir"] + "/" + result["product"] + "_" + result["cve"] + ".so"
-    config.functionName = name[result["cve"]]
+    if result["cve"] in name:
+        config.functionName = name[result["cve"]]
     config.test_dir = result["test_dir"] + "/" + result["product"] + "-" + result["affected_version"]
     config.product = result["product"]
     config.version = result["affected_version"]
