@@ -3,6 +3,7 @@ import os
 import signal
 import subprocess
 import sys
+from contextlib import contextmanager
 
 from rich.progress import Progress
 
@@ -139,7 +140,7 @@ def karonte_job(result):
     unit_test_patch(config)
 
     evaluate_results(config, config.test_dir)
-
+@contextmanager
 def suppress_stdout():
     original_stdout = sys.stdout
     sys.stdout = open(os.devnull, 'w')
