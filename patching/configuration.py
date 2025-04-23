@@ -8,7 +8,6 @@ class Config:
         """
         This class contains all the configuration parameters for the patching process
         :param functionName:     String
-        :param sql_path:         String
         :param binary_path:      String
         """
 
@@ -16,7 +15,10 @@ class Config:
         self.binary_path = None
         self.patch_path = None
         self.output_path = None
-
+        self.test_dir = None
+        self.version = None
+        self.product = None
+        self.firmware = None
 
     def readMagmaConfig(self, path, section):
         try:
