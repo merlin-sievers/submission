@@ -60,16 +60,16 @@ def patch(config):
             print(f"Operation for config {config.binary_path} timed out", te)
             error_logger.error("Timeout occurred for binary_path: %s functionName: %s", config.binary_path,
                                config.functionName)
-
+            return False
         except Exception as e:
             print("Error occurred while patching:", e)
             error_logger.error("An error occurred: %s binary_path: %s functionName: %s", e, config.binary_path,
                                config.functionName)
-
+            return False
         finally:
             # Ensure the alarm is always disabled after each iteration
             signal.alarm(0)
-            return False
+
     else:
         error_logger.error("Function name is None for binary_path: %s", config.binary_path)
         return False
@@ -138,6 +138,8 @@ def karonte_job(result):
     config.output_path = result["test_dir"] + "/" + result["product"] + "_" + result["cve"] + ".so"
     if result["cve"] in name:
         config.functionName = name[result["cve"]]
+    else:
+        return
     config.test_dir = result["test_dir"] + "/" + result["product"] + "-" + result["affected_version"]
     config.product = result["product"]
     config.version = result["affected_version"]

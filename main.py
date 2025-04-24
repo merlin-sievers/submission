@@ -29,6 +29,8 @@
 #
 import logging
 
+import angr
+
 from patching.configuration import Config
 from patching.function import FunctionPatch
 
@@ -139,7 +141,7 @@ from patching.function import FunctionPatch
 #     patching = FunctionPatch(config)
 #     patching.patch_functions()
 #     i = i + 1
-
+angr.Project("/Users/sebastian/Tools/firmware-collection/libz.so.1_modified", auto_load_libs=False)
 
 config = Config()
 config.binary_path = "/home/jaenich/CVE-bin-tool/karonte/NETGEAR/analyzed/R6200v2-V1.0.3.12_10.1.11/fw/_R6200v2-V1.0.3.12_10.1.11.chk.extracted/squashfs-root/lib/libz.so.1"
