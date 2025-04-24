@@ -125,8 +125,11 @@ def evaluate_results(config, cwd):
 
     if result.returncode == 0:
         error_logger.error("Unit test of %s failed", config.output_path)
-    else:
+    elif result.returncode ==1:
         successor_logger.info("Unit test of %s passed", config.output_path)
+    else:
+        error_logger.error("Unknown error occurred while evaluating results for %s", config.output_path)
+
 
 def karonte_job(result):
     name = dict()
