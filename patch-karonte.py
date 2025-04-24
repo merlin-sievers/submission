@@ -131,12 +131,12 @@ def evaluate_results(config, cwd):
 
 def karonte_job(result):
     name = dict()
-    # name["CVE-2016-9841"] = "inflate_fast"
+    name["CVE-2016-9841"] = "inflate_fast"
     name["CVE-2016-9840"] = "inflate_table"
-    # name["CVE-2016-9842"] = "inflateMark"
-    # name["CVE-2023-45853"] = "zipOpenNewFileInZip4_64"
-    # name["CVE-2016-9843"] = "crc32_combine"
-    # name["CVE-2022-37434"] = "inflate"
+    name["CVE-2016-9842"] = "inflateMark"
+    name["CVE-2023-45853"] = "zipOpenNewFileInZip4_64"
+    name["CVE-2016-9843"] = "crc32_combine"
+    name["CVE-2022-37434"] = "inflate"
     config = Config()
     config.binary_path = result["affected_path"]
     config.patch_path = result["patched_path"]
@@ -185,7 +185,7 @@ if __name__ == "__main__":
 
     with Progress() as progress:
         task = progress.add_task("[cyan]Patching...", total=len(results))
-        with multiprocessing.Pool(processes=1) as pool:
+        with multiprocessing.Pool() as pool:
             for _ in pool.imap_unordered(karonte_job, results):
                 progress.update(task, advance=1)
 
