@@ -121,7 +121,7 @@ def evaluate_results(config, cwd):
     command = f"grep -q 'FAILED' test.log"
     error_logger = get_error_logger("results_error.log")
     successor_logger = get_success_logger("results_success.log")
-    result = subprocess.run(command, shell=True, check=True, capture_output=True, cwd=cwd)
+    result = subprocess.run(command, shell=True,  capture_output=True, cwd=cwd)
 
     if result.returncode == 0:
         error_logger.error("Unit test of %s failed", config.output_path)
