@@ -77,30 +77,30 @@ def unit_test_patch(config):
 #     Build the unit tests
     command = f"cd {config.test_dir}"
     if not run_command(command, config.test_dir):
-        return
+        return False
 
     command = f"chmod +x ./configure"
     if not run_command(command, config.test_dir):
-        return
+        return False
 
     command = f"CC='arm-linux-gnueabi-gcc' ./configure --shared"
     if not run_command(command, config.test_dir):
-        return
+        return False
 
     command = f"make"
     print(config.test_dir)
     if not run_command(command, config.test_dir):
-        return
+        return False
 
     command = f"cp {config.output_path} libz.so.{config.version}"
     if not run_command(command, config.test_dir):
-        return
+        return False
 
     command = f"QEMU_LD_PREFIX=/usr/arm-linux-gnueabi/ LD_LIBRARY_PATH=:{config.firmware} make test > test.log 2>&1"
     if not run_command(command, config.test_dir):
-        return
+        return False
 
-
+    return True
 
 
 
@@ -133,8 +133,12 @@ def evaluate_results(config, cwd):
 
 def karonte_job(result):
     name = dict()
-    #name["CVE-2016-9840"] = "inflate_fast"
+    # name["CVE-2016-9840"] = "inflate_fast"
     name["CVE-2016-9841"] = "inflate_table"
+    # name["CVE-2016-9842"] = "inflateMark"
+    # name["CVE-2023-45853"] = "zipOpenNewFileInZip4_64"
+    # name["CVE-2016-9843"] = "crc32_combine"
+    # name["CVE-2022-37434"] = "inflate"
     config = Config()
     config.binary_path = result["affected_path"]
     config.patch_path = result["patched_path"]
@@ -151,7 +155,8 @@ def karonte_job(result):
     if not patch(config):
         return
 
-    unit_test_patch(config)
+    if not unit_test_patch(config):
+        return
 
     evaluate_results(config, config.test_dir)
 
