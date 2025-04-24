@@ -151,26 +151,16 @@ def karonte_job(result):
     unit_test_patch(config)
 
     evaluate_results(config, config.test_dir)
-@contextmanager
-def suppress_stdout():
-    original_stdout = sys.stdout
-    sys.stdout = open(os.devnull, 'w')
-    try:
-        yield
-    finally:
-        sys.stdout.close()
-        sys.stdout = original_stdout
+
 
 
 if __name__ == "__main__":
 
     start = Config()
-    results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results.json")
+    results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-no-stack.json")
 
     with Progress() as progress:
         task = progress.add_task("[cyan]Patching...", total=len(results))
-        with suppress_stdout():
-            print("This will be suppressed")
         with multiprocessing.Pool(processes=1) as pool:
             for _ in pool.imap_unordered(karonte_job, results):
                 progress.update(task, advance=1)
