@@ -131,8 +131,8 @@ def evaluate_results(config, cwd):
 
 def karonte_job(result):
     name = dict()
-    # name["CVE-2016-9840"] = "inflate_fast"
-    name["CVE-2016-9841"] = "inflate_table"
+    # name["CVE-2016-9841"] = "inflate_fast"
+    name["CVE-2016-9840"] = "inflate_table"
     # name["CVE-2016-9842"] = "inflateMark"
     # name["CVE-2023-45853"] = "zipOpenNewFileInZip4_64"
     # name["CVE-2016-9843"] = "crc32_combine"
