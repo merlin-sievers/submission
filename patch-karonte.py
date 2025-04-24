@@ -23,29 +23,28 @@ def timeout_handler(signum, frame):
 
 def get_error_logger(name):
     # --- Error Logger ---
-    error_logger = logging.getLogger(name)
-    error_logger.setLevel(logging.ERROR)
-    error_handler = logging.FileHandler(name)
-    error_formatter = logging.Formatter('%(asctime)s - ERROR - %(message)s')
-    error_handler.setFormatter(error_formatter)
-    error_logger.addHandler(error_handler)
-    return error_logger
+    e_logger = logging.getLogger(name)
+    e_logger.setLevel(logging.ERROR)
+    e_handler = logging.FileHandler(name)
+    e_formatter = logging.Formatter('%(asctime)s - ERROR - %(message)s')
+    e_handler.setFormatter(e_formatter)
+    e_logger.addHandler(e_handler)
+    return e_logger
 
 def get_success_logger(name):
     # --- Success Logger ---
-    success_logger = logging.getLogger(name)
-    success_logger.setLevel(logging.INFO)
-    success_handler = logging.FileHandler(name)
-    success_formatter = logging.Formatter('%(asctime)s - SUCCESS - %(message)s')
-    success_handler.setFormatter(success_formatter)
-    success_logger.addHandler(success_handler)
-    return  success_logger
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    handler = logging.FileHandler(name)
+    formatter = logging.Formatter('%(asctime)s - SUCCESS - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    return  logger
 
 
 def patch(config):
 
-    success_logger = get_success_logger("success.log")
-    error_logger = get_error_logger("error.log")
+
     signal.signal(signal.SIGALRM, timeout_handler)
     if config.functionName is not None:
         try:
@@ -105,22 +104,21 @@ def unit_test_patch(config):
 
 
 def run_command(command, cwd):
-    error_logger = get_error_logger("command_error.log")
+
     try:
         result = subprocess.run(command, shell=True, check=True, capture_output=True, cwd=cwd)
     except subprocess.CalledProcessError as e:
-        error_logger.error(f'Command "{command}" failed with error: {e.stderr.decode()}')
+        command_error_logger.error(f'Command "{command}" failed with error: {e.stderr.decode()}')
         return False
 
     if result.returncode != 0:
-        error_logger.error(f'Failed to run "{command}" in "{cwd}"')
+        command_error_logger.error(f'Failed to run "{command}" in "{cwd}"')
         return False
     return True
 
 def evaluate_results(config, cwd):
     command = f"grep -q 'FAILED' test.log"
-    results_error_logger = get_error_logger("results_error.log")
-    results_successor_logger = get_success_logger("results_success.log")
+
     result = subprocess.run(command, shell=True,  capture_output=True, cwd=cwd)
 
     if result.returncode == 0:
@@ -166,6 +164,12 @@ if __name__ == "__main__":
 
     start = Config()
     results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-no-stack.json")
+    results_error_logger = get_error_logger("results_error.log")
+    results_successor_logger = get_success_logger("results_success.log")
+    command_error_logger = get_error_logger("command_error.log")
+    success_logger = get_success_logger("success.log")
+    error_logger = get_error_logger("error.log")
+
 
 
     # Save reference to the real print
