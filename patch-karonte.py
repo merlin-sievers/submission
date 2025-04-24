@@ -2,8 +2,8 @@ import multiprocessing
 import os
 import signal
 import subprocess
-import sys
-from contextlib import contextmanager
+
+import builtins
 
 from rich.progress import Progress
 
@@ -23,7 +23,7 @@ def timeout_handler(signum, frame):
 
 def get_error_logger(name):
     # --- Error Logger ---
-    error_logger = logging.getLogger("error_logger")
+    error_logger = logging.getLogger(name)
     error_logger.setLevel(logging.ERROR)
     error_handler = logging.FileHandler(name)
     error_formatter = logging.Formatter('%(asctime)s - ERROR - %(message)s')
@@ -33,7 +33,7 @@ def get_error_logger(name):
 
 def get_success_logger(name):
     # --- Success Logger ---
-    success_logger = logging.getLogger("success_logger")
+    success_logger = logging.getLogger(name)
     success_logger.setLevel(logging.INFO)
     success_handler = logging.FileHandler(name)
     success_formatter = logging.Formatter('%(asctime)s - SUCCESS - %(message)s')
@@ -119,16 +119,16 @@ def run_command(command, cwd):
 
 def evaluate_results(config, cwd):
     command = f"grep -q 'FAILED' test.log"
-    error_logger = get_error_logger("results_error.log")
-    successor_logger = get_success_logger("results_success.log")
+    results_error_logger = get_error_logger("results_error.log")
+    results_successor_logger = get_success_logger("results_success.log")
     result = subprocess.run(command, shell=True,  capture_output=True, cwd=cwd)
 
     if result.returncode == 0:
-        error_logger.error("Unit test of %s failed", config.output_path)
+        results_error_logger.error("Unit test of %s failed", config.output_path)
     elif result.returncode ==1:
-        successor_logger.info("Unit test of %s passed", config.output_path)
+        results_successor_logger.info("Unit test of %s passed", config.output_path)
     else:
-        error_logger.error("Unknown error occurred while evaluating results for %s", config.output_path)
+        results_error_logger.error("Unknown error occurred while evaluating results for %s", config.output_path)
 
 
 def karonte_job(result):
@@ -161,6 +161,18 @@ if __name__ == "__main__":
 
     start = Config()
     results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-no-stack.json")
+
+
+    # Save reference to the real print
+    _real_print = builtins.print
+
+
+    def mute_print(*args, **kwargs):
+        # no-op: do nothing
+        pass
+
+
+    builtins.print = mute_print
 
     with Progress() as progress:
         task = progress.add_task("[cyan]Patching...", total=len(results))
