@@ -72,7 +72,7 @@ class FunctionPatch(Patching):
 
         if self.project_vuln.loader.find_symbol(self.patching_config.functionName) is None:
             print(self.patching_config.functionName + " not found in binary")
-            raise Exception("Function %s not found in binary", self.patching_config.functionName)
+            raise Exception("Function not found in binary", self.patching_config.functionName)
 
         self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
         # TODO: Find a better option to get the end
