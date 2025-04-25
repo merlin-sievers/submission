@@ -44,6 +44,7 @@ class Config:
         for entry in data:
             version = entry.get("version")
             patched_version = entry.get("patched_version")
+            patched_version = patched_version.get("version")
             product = entry.get("product")
             cve = entry.get("cve")
             instances = entry.get("instances", [])
