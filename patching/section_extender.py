@@ -151,6 +151,15 @@ class SectionExtender:
         # binary1= lief.ELF.parse(self.elf_file)
         # Create a new section
 
+
+        section = [s for s in binary.sections]
+        if section == []:
+            return None
+
+
+
+
+
         new_section = lief.ELF.Section(".patch")
         new_section.content = self.additional_size * [0x00]  # Fill with NOPs (64KB)
         new_section.flags = 6

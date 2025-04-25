@@ -63,6 +63,9 @@ class FunctionPatch(Patching):
         self.limit = 1
         # TODO: Hack to extend segment and match afterwards
         vuln = SectionExtender(self.patching_config.binary_path, 524288).add_section()
+        if vuln is None:
+            vuln = SectionExtender(self.patching_config.binary_path, 1024).extend_last_section_of_segment()
+
 
         # TODO: Add path to the binary as an argument for the configuration
         self.project_vuln = angr.Project(vuln, auto_load_libs=False)
