@@ -48,6 +48,7 @@ def patch(config):
     signal.signal(signal.SIGALRM, timeout_handler)
     if config.functionName is not None:
         try:
+            signal.alarm(1200)
             patching = FunctionPatch(config)
             patching.patch_functions()
             # Disable the alarm if patching is successful
