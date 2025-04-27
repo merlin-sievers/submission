@@ -9,12 +9,11 @@ from rich.progress import Progress
 
 from patching.configuration import Config
 from patching.function import FunctionPatch
-from tests import UnitTest
 
 import logging
 
 from tests.zlib import ZlibUnitTest
-
+from tests.libpng import LibPNGUnitTest
 
 class TimeoutException(Exception):
     pass
@@ -135,27 +134,26 @@ def evaluate_results(config, cwd):
 
 def karonte_job(result):
     supported_libs = {
-        "zlib": ZlibUnitTest,
-        # "libpng": "g",
+        #"zlib": ZlibUnitTest,
+        "libpng": LibPNGUnitTest,
     }
 
     config = Config()
-    build = supported_libs[config.product](config)
-    name = build.name
 
     config.binary_path = result["affected_path"]
     config.patch_path = result["patched_path"]
     config.product = result["product"]
     config.output_path = result["test_dir"] + "/" + result["product"] + "_" + result["cve"] + ".so"
+    config.test_dir = result["test_dir"] + "/" + result["product"] + "-" + result["affected_version"]
+    config.product = result["product"]
+    config.version = result["affected_version"]
+    config.firmware = os.path.dirname(config.binary_path)
+    build = supported_libs[config.product](config)
+    name = build.name
     if result["cve"] in name:
         config.functionName = name[result["cve"]]
     else:
         return
-    config.test_dir = result["test_dir"] + "/" + result["product"] + "-" + result["affected_version"]
-    # config.product = result["product"]
-    config.version = result["affected_version"]
-    config.firmware = os.path.dirname(config.binary_path)
-
 
     if not patch(config):
         return
@@ -171,7 +169,7 @@ def karonte_job(result):
 if __name__ == "__main__":
 
     start = Config()
-    results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-no-stack.json")
+    results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-libpng.json")
     results_error_logger = get_error_logger("results_error.log")
     results_success_logger = get_success_logger("results_success.log")
     command_error_logger = get_error_logger("command_error.log")
