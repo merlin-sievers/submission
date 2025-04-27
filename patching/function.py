@@ -64,7 +64,8 @@ class FunctionPatch(Patching):
         # TODO: Hack to extend segment and match afterwards
         vuln = SectionExtender(self.patching_config.binary_path, 524288).add_section()
         if vuln is None:
-            vuln = SectionExtender(self.patching_config.binary_path, 1024).extend_last_section_of_segment()
+            raise Exception("Sections stripped")
+            #           vuln = SectionExtender(self.patching_config.binary_path, 1024).extend_last_section_of_segment()
 
 
         # TODO: Add path to the binary as an argument for the configuration
