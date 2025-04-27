@@ -9,8 +9,11 @@ from rich.progress import Progress
 
 from patching.configuration import Config
 from patching.function import FunctionPatch
+from tests import UnitTest
 
 import logging
+
+from tests.zlib import ZlibUnitTest
 
 
 class TimeoutException(Exception):
@@ -125,40 +128,43 @@ def evaluate_results(config, cwd):
     if result.returncode == 0:
         results_error_logger.error("Unit test of %s failed", config.output_path)
     elif result.returncode ==1:
-        results_successor_logger.info("Unit test of %s passed in %s", config.output_path, config.firmware)
+        results_success_logger.info("Unit test of %s passed in %s", config.output_path, config.firmware)
     else:
         results_error_logger.error("Unknown error occurred while evaluating results for %s", config.output_path)
 
 
 def karonte_job(result):
-    name = dict()
-    # name["CVE-2016-9841"] = "inflate_fast"
-    name["CVE-2016-9840"] = "inflate_table"
-    name["CVE-2016-9842"] = "inflateMark"
-    # name["CVE-2023-45853"] = "zipOpenNewFileInZip4_64"
-    name["CVE-2016-9843"] = "crc32_combine"
-    # name["CVE-2022-37434"] = "inflate"
-    # name["CVE-2018-25032"] = "deflateInit2_"
+    supported_libs = {
+        "zlib": ZlibUnitTest,
+        # "libpng": "g",
+    }
+
     config = Config()
+    build = supported_libs[config.product](config)
+    name = build.name
+
     config.binary_path = result["affected_path"]
     config.patch_path = result["patched_path"]
+    config.product = result["product"]
     config.output_path = result["test_dir"] + "/" + result["product"] + "_" + result["cve"] + ".so"
     if result["cve"] in name:
         config.functionName = name[result["cve"]]
     else:
         return
     config.test_dir = result["test_dir"] + "/" + result["product"] + "-" + result["affected_version"]
-    config.product = result["product"]
+    # config.product = result["product"]
     config.version = result["affected_version"]
     config.firmware = os.path.dirname(config.binary_path)
+
 
     if not patch(config):
         return
 
-    if not unit_test_patch(config):
+
+    if not build.unit_test_patch():
         return
 
-    evaluate_results(config, config.test_dir)
+    build.evaluate_results()
 
 
 
@@ -167,12 +173,15 @@ if __name__ == "__main__":
     start = Config()
     results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-no-stack.json")
     results_error_logger = get_error_logger("results_error.log")
-    results_successor_logger = get_success_logger("results_success.log")
+    results_success_logger = get_success_logger("results_success.log")
     command_error_logger = get_error_logger("command_error.log")
     success_logger = get_success_logger("success.log")
     error_logger = get_error_logger("error.log")
 
-
+    supported_libs={
+        "zlib": ZlibUnitTest,
+        # "libpng": "libpng",
+    }
 
     # Save reference to the real print
     _real_print = builtins.print
