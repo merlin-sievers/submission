@@ -12,6 +12,7 @@ from patching.function import FunctionPatch
 
 import logging
 
+from tests.libflac import LibFlacUnitTest
 from tests.zlib import ZlibUnitTest
 from tests.libpng import LibPNGUnitTest
 
@@ -135,7 +136,8 @@ def evaluate_results(config, cwd):
 def karonte_job(result):
     supported_libs = {
         #"zlib": ZlibUnitTest,
-        "libpng": LibPNGUnitTest,
+        # "libpng": LibPNGUnitTest,
+        "flac": LibFlacUnitTest,
     }
 
     config = Config()
@@ -177,8 +179,9 @@ if __name__ == "__main__":
     error_logger = get_error_logger("error.log")
 
     supported_libs={
-        "zlib": ZlibUnitTest,
-        # "libpng": "libpng",
+        # "zlib": ZlibUnitTest,
+        # "libpng": LibPNGUnitTest,
+        "flac": LibFlacUnitTest,
     }
 
     # Save reference to the real print
