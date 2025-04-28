@@ -72,15 +72,26 @@ class FunctionPatch(Patching):
         self.project_vuln = angr.Project(vuln, auto_load_libs=False)
 
         print("\n\t Starting to analyze the vulnerable Program CFGFast...")
-        self.cfg_vuln = self.project_vuln.analyses.CFGFast()
 
         if self.project_vuln.loader.find_symbol(self.patching_config.functionName) is None:
-            print(self.patching_config.functionName + " not found in binary")
-            raise Exception("Function not found in binary", self.patching_config.functionName)
-
-        self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
+            project_help = angr.Project(self.patching_config.test_dir+"libz.so", auto_load_libs=False)
+            cfg = project_help.analyses.CFGFast()
+            #
+            bindiff_results = self.project_vuln.analyses.BinDiff(project_help, cfg_a=self.cfg_vuln, cfg_b=cfg)
+            #
+            entry_point = project_help.loader.find_symbol(self.patching_config.functionName).rebased_addr
+            #
+            match = [s for (s, entry_point) in bindiff_results.function_matches]
+            if len(match) > 0:
+                self.entry_point_vuln = match[0]
+                self.end_vuln = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
+            else:
+                print(self.patching_config.functionName + " not found in binary")
+                raise Exception("Function not found in binary", self.patching_config.functionName)
+        else:
+            self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
         # TODO: Find a better option to get the end
-        self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(
+            self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(
             self.patching_config.functionName).size
         print("\n\t Starting to analyze the vulnerable Program CFGEmul...")
 
