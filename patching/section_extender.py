@@ -1,7 +1,28 @@
 import lief
 
 class SectionExtender:
+    """
+    A class for extending or adding sections to ELF binary files.
+
+    This class provides methods to:
+    - Extend the last section of a segment
+    - Add a new section to a binary
+    - Add a new segment to a binary
+    - Extend a monolithic firmware
+    - Add a section with specific program header and dynamic section information
+
+    Attributes:
+        elf_file (str): Path to the ELF binary file to modify
+        additional_size (int): Size in bytes to extend the section or segment by
+    """
     def __init__(self, elf_file, additional_size):
+        """
+        Initialize the SectionExtender with an ELF file and additional size.
+
+        Args:
+            elf_file (str): Path to the ELF binary file to modify
+            additional_size (int): Size in bytes to extend the section or segment by
+        """
         self.elf_file = elf_file
         self.additional_size = additional_size
     def extend_last_section_of_segment(self):
@@ -155,10 +176,6 @@ class SectionExtender:
         section = [s for s in binary.sections]
         if section == []:
             return None
-
-
-
-
 
         new_section = lief.ELF.Section(".patch")
         new_section.content = self.additional_size * [0x00]  # Fill with NOPs (64KB)
@@ -336,4 +353,28 @@ class SectionExtender:
         binary.extend(max_segment, self.additional_size)
         output_file = self.elf_file + "_modified"
         binary.write(output_file)
+        return output_file
+
+    def add_section_with_program_header(self):
+
+        binary = lief.parse(self.elf_file)
+
+
+        # Create a new section
+        new_section = lief.ELF.Section("new_section")
+        new_section.content = self.additional_size * [0x00]  # Fill with zeros
+        new_section.flags = lief.ELF.Section.FLAGS.ALLOC | lief.ELF.Section.FLAGS.EXECINSTR  # Executable section
+
+
+        # Add the new segment
+        binary.add(new_section)
+
+        header = binary.header
+        # Write the modified binary to disk
+        header.section_header_offset = 0
+        output_file = self.elf_file + "_modified_with_header"
+
+        binary.write(output_file)
+        # elf.write(output_file)
+
         return output_file
