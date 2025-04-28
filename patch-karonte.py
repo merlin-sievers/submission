@@ -12,6 +12,7 @@ from patching.function import FunctionPatch
 
 import logging
 
+from tests.busybox import BusyBoxUnitTest
 from tests.libflac import LibFlacUnitTest
 from tests.zlib import ZlibUnitTest
 from tests.libpng import LibPNGUnitTest
@@ -137,7 +138,8 @@ def karonte_job(result):
     supported_libs = {
         #"zlib": ZlibUnitTest,
         # "libpng": LibPNGUnitTest,
-        "flac": LibFlacUnitTest,
+        # "flac": LibFlacUnitTest,
+        "busybox": BusyBoxUnitTest,
     }
 
     config = Config()
@@ -171,18 +173,13 @@ def karonte_job(result):
 if __name__ == "__main__":
 
     start = Config()
-    results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-libpng.json")
+    results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-busybox.json")
     results_error_logger = get_error_logger("results_error.log")
     results_success_logger = get_success_logger("results_success.log")
     command_error_logger = get_error_logger("command_error.log")
     success_logger = get_success_logger("success.log")
     error_logger = get_error_logger("error.log")
 
-    supported_libs={
-        # "zlib": ZlibUnitTest,
-        # "libpng": LibPNGUnitTest,
-        "flac": LibFlacUnitTest,
-    }
 
     # Save reference to the real print
     _real_print = builtins.print
