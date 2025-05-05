@@ -16,6 +16,7 @@ from tests.busybox import BusyBoxUnitTest
 from tests.libflac import LibFlacUnitTest
 from tests.zlib import ZlibUnitTest
 from tests.libpng import LibPNGUnitTest
+from tests.libpcap import LibpcapUnitTest
 
 class TimeoutException(Exception):
     pass
@@ -48,7 +49,6 @@ def get_success_logger(name):
 
 def patch(config):
 
-
     signal.signal(signal.SIGALRM, timeout_handler)
     if config.functionName is not None:
         try:
@@ -56,22 +56,22 @@ def patch(config):
             patching = FunctionPatch(config)
             patching.patch_functions()
             # Disable the alarm if patching is successful
-            success_logger.info("Patching completed successfully for binary_path: %s functionName: %s",
-                                config.binary_path, config.functionName)
+            success_logger.info("Patching completed successfully for binary_path: %s functionName: %s", config.binary_path, config.functionName)
             signal.alarm(0)
             return True
         except TimeoutException as te:
             print(f"Operation for config {config.binary_path} timed out", te)
             error_logger.error("Timeout occurred for binary_path: %s functionName: %s", config.binary_path,
-                               config.functionName)
+                                 config.functionName)
             return False
+   
         except Exception as e:
             print("Error occurred while patching:", e)
             error_logger.error("An error occurred: %s binary_path: %s functionName: %s", e, config.binary_path,
                                config.functionName)
             return False
         finally:
-            # Ensure the alarm is always disabled after each iteration
+            #Ensure the alarm is always disabled after each iteration
             signal.alarm(0)
 
     else:
@@ -113,7 +113,7 @@ def run_command(command, cwd):
     try:
         result = subprocess.run(command, shell=True, check=True, capture_output=True, cwd=cwd)
     except subprocess.CalledProcessError as e:
-        command_error_logger.error(f'Command "{command}" failed with error: {e.stderr.decode()}')
+        command_error_logger.error(f'Command "{command}" failed with error: {e.stderr.decode()}',e)
         return False
 
     if result.returncode != 0:
@@ -137,25 +137,39 @@ def evaluate_results(config, cwd):
 def karonte_job(result):
     supported_libs = {
         #"zlib": ZlibUnitTest,
-        # "libpng": LibPNGUnitTest,
-        # "flac": LibFlacUnitTest,
+        #"libpng": LibPNGUnitTest,
+        #"flac": LibFlacUnitTest,
         "busybox": BusyBoxUnitTest,
+        #"libpcap": LibpcapUnitTest,
     }
+
 
     config = Config()
 
     config.binary_path = result["affected_path"]
+    if "modified" in config.binary_path:
+        return
+    if "patched" in config.binary_path:
+        return
+    if "vuln_test" in config.binary_path:
+        return
+
     config.patch_path = result["patched_path"]
     config.product = result["product"]
     config.output_path = result["test_dir"] + "/" + result["product"] + "_" + result["cve"] + ".so"
-    config.test_dir = result["test_dir"] + "/" + result["product"] + "-" + result["affected_version"]
+    config.test_dir = result["test_dir"]
+    #+ "/" + result["product"] + "-" + result["affected_version"]
     config.product = result["product"]
     config.version = result["affected_version"]
     config.firmware = os.path.dirname(config.binary_path)
-    build = supported_libs[config.product](config)
-    name = build.name
-    if result["cve"] in name:
-        config.functionName = name[result["cve"]]
+    
+    if config.product in supported_libs:
+        build = supported_libs[config.product](config)
+        name = build.name
+        if result["cve"] in name:
+            config.functionName = name[result["cve"]]
+        else:
+            return
     else:
         return
 
@@ -179,7 +193,7 @@ if __name__ == "__main__":
     command_error_logger = get_error_logger("command_error.log")
     success_logger = get_success_logger("success.log")
     error_logger = get_error_logger("error.log")
-
+    match_logger = get_success_logger("match.log")
 
     # Save reference to the real print
     _real_print = builtins.print

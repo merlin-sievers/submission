@@ -12,8 +12,8 @@ class LibFlacUnitTest(UnitTest):
         super().__init__(config)
         self.name = dict()
 
-        self.name["CVE-2017-6888"] = "read_metadata_vorbiscomment_"
-        self.name["CVE-2020-22219"] = "bitwriter_grow_"
+        self.name["CVE-2017-6888"] = "read_metadata_"
+        #self.name["CVE-2020-22219"] = "bitwriter_grow_"
 
 
 

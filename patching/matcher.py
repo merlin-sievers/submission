@@ -102,12 +102,14 @@ class RefMatcher:
                             self.match_to_old_address.setdefault(matching[0][0], []).append(ref)
 
                 if ref.toAddr == got_addr:
+                    got_addr_vuln = None
                     for sec in project_vuln.loader.main_object.sections:
                         if sec.name == ".got":
                             got_addr_vuln = sec.min_addr
-                    new_ref = Reference(ref.fromAddr, got_addr_vuln, ref.refType)
-                    self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
-                    self.match_to_old_address.setdefault(got_addr_vuln, []).append(ref)
+                    if got_addr_vuln is not None:
+                        new_ref = Reference(ref.fromAddr, got_addr_vuln, ref.refType)
+                        self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
+                        self.match_to_old_address.setdefault(got_addr_vuln, []).append(ref)
 
                 if ref.toAddr > got_addr:
 

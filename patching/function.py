@@ -59,32 +59,39 @@ class FunctionPatch(Patching):
 
 
     def start(self):
-
+        match_logger = logging.getLogger("match.log")
         self.limit = 1
         # TODO: Hack to extend segment and match afterwards
         vuln = SectionExtender(self.patching_config.binary_path, 524288).add_section()
         if vuln is None:
-            # raise Exception("Sections stripped")
+            #raise Exception("Sections stripped")
             vuln = SectionExtender(self.patching_config.binary_path, 524288).add_section_with_program_header()
 
 
         # TODO: Add path to the binary as an argument for the configuration
         self.project_vuln = angr.Project(vuln, auto_load_libs=False)
-
+        self.cfg_vuln = self.project_vuln.analyses.CFGFast()
         print("\n\t Starting to analyze the vulnerable Program CFGFast...")
 
         if self.project_vuln.loader.find_symbol(self.patching_config.functionName) is None:
-            project_help = angr.Project(self.patching_config.test_dir+"libz.so", auto_load_libs=False)
+            major = self.patching_config.version.split(".")
+            major_version = major[0] + major[1]
+ 
+            #string = self.patching_config.test_dir + '/.libs/libpng' + major_version + '.so'
+#           string = self.patching_config.test_dir  +  '/src/libFLAC/.libs/libFLAC.so'
+            string = self.patching_config.test_dir + '/libpcap.so.' + self.patching_config.version
+            project_help = angr.Project(string, auto_load_libs=False)
+            if project_help is None:
+                raise Exception("wrong path")
             cfg = project_help.analyses.CFGFast()
-            #
-            bindiff_results = self.project_vuln.analyses.BinDiff(project_help, cfg_a=self.cfg_vuln, cfg_b=cfg)
-            #
             entry_point = project_help.loader.find_symbol(self.patching_config.functionName).rebased_addr
-            #
-            match = [s for (s, entry_point) in bindiff_results.function_matches]
+            bindiff_results = project_help.analyses.BinDiff(self.project_vuln, cfg_b=self.cfg_vuln, cfg_a=cfg, entry_point=entry_point)
+            match = [e for (s, e) in bindiff_results.function_matches if s == entry_point]
+            #match_logger.info("Entry %s", entry_point)
             if len(match) > 0:
                 self.entry_point_vuln = match[0]
                 self.end_vuln = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
+                match_logger.info("Matched function %s in %s", self.entry_point_vuln, self.patching_config.binary_path)
             else:
                 print(self.patching_config.functionName + " not found in binary")
                 raise Exception("Function not found in binary", self.patching_config.functionName)
@@ -120,7 +127,7 @@ class FunctionPatch(Patching):
         print("\n\t Starting to analyze the patch Program CFGEmul...")
         self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
                                                                            state_add_options=option,
-                                                                           starts=[self.entry_point_patch])
+                                                                           starts=[self.entry_point_patch], call_depth=2)
 
         print("\n\t Starting to analyze the patch Program DDG...")
         self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific,

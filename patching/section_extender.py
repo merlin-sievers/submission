@@ -372,7 +372,7 @@ class SectionExtender:
         header = binary.header
         # Write the modified binary to disk
         header.section_header_offset = 0
-        output_file = self.elf_file + "_modified_with_header"
+        output_file = self.elf_file + "_modified"
 
         binary.write(output_file)
         # elf.write(output_file)

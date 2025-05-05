@@ -1,7 +1,7 @@
 import logging
 import subprocess
 
-command_error_logger = logging.getLogger('command_error_logger')
+command_error_logger = logging.getLogger('command_error.log')
 
 
 class UnitTest:
@@ -16,7 +16,7 @@ class UnitTest:
         try:
             result = subprocess.run(command, shell=True, check=True, capture_output=True, cwd=cwd)
         except subprocess.CalledProcessError as e:
-            command_error_logger.error(f'Command "{command}" failed with error: {e.stderr.decode()}')
+            command_error_logger.error(f'Command "{command}" failed with error: {e} in %s', self.config.test_dir)
             return False
 
         if result.returncode != 0:
