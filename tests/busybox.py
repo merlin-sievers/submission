@@ -11,15 +11,19 @@ class BusyBoxUnitTest(UnitTest):
     def __init__(self, config):
         super().__init__(config)
         self.name = dict()
+        self.test_binary =  None
 
-        self.name["CVE-2014-9645"] = "add_probe"
+        self.name["CVE-2014-9645"] = "modprobe_main"
         self.name["CVE-2015-9261"] = "huft_build"
-        self.name["CVE-2018-1000500"] = "add_match"
+        #self.name["CVE-2018-1000500"] = "add_match"
         self.name["CVE-2021-42378"] = "getvar_i"
-        self.name["CVE-2021-432379"] ="next_input_file"
+        self.name["CVE-2021-42379"] ="next_input_file"
         self.name["CVE-2021-42381"]= "hash_init"
         self.name["CVE-2021-42384"] = "handle_special"
         self.name["CVE-2021-42386"] = "nvalloc"
+
+        self.test_binary = config.test_dir + '/busybox'
+
     def unit_test_patch(self):
         #     Build the unit tests
         command = f"cd {self.config.test_dir}"

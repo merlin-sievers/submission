@@ -11,10 +11,11 @@ class LibFlacUnitTest(UnitTest):
     def __init__(self, config):
         super().__init__(config)
         self.name = dict()
+        self.test_binary = None
 
         self.name["CVE-2017-6888"] = "read_metadata_"
         #self.name["CVE-2020-22219"] = "bitwriter_grow_"
-
+        self.test_binary = config.test_dir + '/src/libFLAC/.libs/libFLAC.so'
 
 
     def unit_test_patch(self):

@@ -76,10 +76,12 @@ class FunctionPatch(Patching):
         if self.project_vuln.loader.find_symbol(self.patching_config.functionName) is None:
             major = self.patching_config.version.split(".")
             major_version = major[0] + major[1]
- 
+            
+            #string = self.patching_config.test_binary
             #string = self.patching_config.test_dir + '/.libs/libpng' + major_version + '.so'
 #           string = self.patching_config.test_dir  +  '/src/libFLAC/.libs/libFLAC.so'
-            string = self.patching_config.test_dir + '/libpcap.so.' + self.patching_config.version
+ #           string = self.patching_config.test_dir + '/libpcap.so.' + self.patching_config.version
+            string = self.patching_config.test_dir + '/busybox'
             project_help = angr.Project(string, auto_load_libs=False)
             if project_help is None:
                 raise Exception("wrong path")

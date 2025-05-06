@@ -52,7 +52,7 @@ def patch(config):
     signal.signal(signal.SIGALRM, timeout_handler)
     if config.functionName is not None:
         try:
-            signal.alarm(1200)
+            signal.alarm(4200)
             patching = FunctionPatch(config)
             patching.patch_functions()
             # Disable the alarm if patching is successful
@@ -166,6 +166,7 @@ def karonte_job(result):
     if config.product in supported_libs:
         build = supported_libs[config.product](config)
         name = build.name
+        config.test_binary = build.test_binary
         if result["cve"] in name:
             config.functionName = name[result["cve"]]
         else:

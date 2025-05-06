@@ -11,10 +11,14 @@ class LibPNGUnitTest(UnitTest):
     def __init__(self, config):
         super().__init__(config)
         self.name = dict()
+        self.test_binary = None
 
         self.name["CVE-2016-10087"] = "png_set_text_2"
         self.name["CVE-2017-12652"] = "png_read_chunk_header"
 
+        major = config.version.split(".")
+  78    major_version = major[0] + major[1]
+        self.test_binary = config.test_dir +'/.libs/libpng' + major_version + '.so'
 
 
     def unit_test_patch(self):

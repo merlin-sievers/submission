@@ -11,6 +11,8 @@ class ZlibUnitTest(UnitTest):
     def __init__(self, config):
         super().__init__(config)
         self.name = dict()
+        self.test_binary = None
+
         self.name["CVE-2016-9841"] = "inflate_fast"
         self.name["CVE-2016-9840"] = "inflate_table"
         self.name["CVE-2016-9842"] = "inflateMark"
@@ -18,7 +20,8 @@ class ZlibUnitTest(UnitTest):
         self.name["CVE-2016-9843"] = "crc32_combine"
         # name["CVE-2022-37434"] = "inflate"
         # name["CVE-2018-25032"] = "deflateInit2_"
-
+        
+        self.test_binary = config.test_dir + '/libz.so' + config.version
 
 
     def unit_test_patch(self):

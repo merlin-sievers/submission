@@ -11,9 +11,13 @@ class LibpcapUnitTest(UnitTest):
     def __init__(self, config):
         super().__init__(config)
         self.name = dict()
+        self.test_binary =  None
+
         self.name["CVE-2024-8006"] = "pcap_findalldevs"
         self.name["CVE-2019-15165"] = "pcap_ng_check_header"
        # self.name["CVE-2019-15161"] = "daemon_msg_findallif_req"
+
+        self.test_binary = config.test_dir +  '/libpcap.so' + config.version
 
 
     def unit_test_patch(self):
