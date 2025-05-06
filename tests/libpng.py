@@ -17,7 +17,7 @@ class LibPNGUnitTest(UnitTest):
         self.name["CVE-2017-12652"] = "png_read_chunk_header"
 
         major = config.version.split(".")
-  78    major_version = major[0] + major[1]
+        major_version = major[0] + major[1]
         self.test_binary = config.test_dir +'/.libs/libpng' + major_version + '.so'
 
 
