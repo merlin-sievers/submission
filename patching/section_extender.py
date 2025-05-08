@@ -358,21 +358,22 @@ class SectionExtender:
     def add_section_with_program_header(self):
 
         binary = lief.parse(self.elf_file)
-
+        binary1 = lief.parse(self.elf_file)
 
         # Create a new section
-        new_section = lief.ELF.Section("new_section")
+        new_section = lief.ELF.Section("patch")
         new_section.content = self.additional_size * [0x00]  # Fill with zeros
         new_section.flags = lief.ELF.Section.FLAGS.ALLOC | lief.ELF.Section.FLAGS.EXECINSTR  # Executable section
 
 
         # Add the new segment
         binary.add(new_section)
-
+        header1 = binary1.header
         header = binary.header
         # Write the modified binary to disk
         header.section_header_offset = 0
-        output_file = self.elf_file + "_modified"
+        header.numberof_sections = 0
+        output_file = self.elf_file + ("_modified")
 
         binary.write(output_file)
         # elf.write(output_file)
