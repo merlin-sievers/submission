@@ -12,7 +12,7 @@ dependencies = [
     "monkeyhex==1.7.4",
     "archinfo==9.2.72",
     "networkx==3.1",
-    # "patcherex==1.2",  # Uncomment if needed
+    # "eatcherex==1.2",  # Uncomment if needed
     "lief",
     "cle==9.2.72",
     "pyelftools==0.30",

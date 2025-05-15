@@ -13,14 +13,14 @@ class BusyBoxUnitTest(UnitTest):
         self.name = dict()
         self.test_binary =  None
 
-        self.name["CVE-2014-9645"] = "modprobe_main"
-        self.name["CVE-2015-9261"] = "huft_build"
+        #self.name["CVE-2014-9645"] = "modprobe_main"
+ #       self.name["CVE-2015-9261"] = "huft_build"
         #self.name["CVE-2018-1000500"] = "add_match"
-        self.name["CVE-2021-42378"] = "getvar_i"
-        self.name["CVE-2021-42379"] ="next_input_file"
-        self.name["CVE-2021-42381"]= "hash_init"
-        self.name["CVE-2021-42384"] = "handle_special"
-        self.name["CVE-2021-42386"] = "nvalloc"
+#        self.name["CVE-2021-42378"] = "getvar_i"
+  #      self.name["CVE-2021-42379"] ="next_input_file"
+   #     self.name["CVE-2021-42381"]= "hash_init"
+    #    self.name["CVE-2021-42384"] = "handle_special"
+        self.name["CVE-2021-42386"] = ("nvalloc","nvalloc")
 
         self.test_binary = config.test_dir + '/busybox'
 
@@ -30,9 +30,6 @@ class BusyBoxUnitTest(UnitTest):
         if not self.run_command(command, self.config.test_dir):
             return False
 
-        command = f"chmod +x ./self.configure"
-        if not self.run_command(command, self.config.test_dir):
-            return False
 
         command = f"CC='arm-linux-gnueabi-gcc' ./self.configure --shared"
         if not self.run_command(command, self.config.test_dir):

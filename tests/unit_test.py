@@ -1,7 +1,6 @@
 import logging
 import subprocess
 
-command_error_logger = logging.getLogger('command_error.log')
 
 
 class UnitTest:
@@ -13,10 +12,12 @@ class UnitTest:
         return NotImplementedError
 
     def run_command(self, command, cwd):
+        
+        command_error_logger = logging.getLogger('command_error-'+self.config.product+'.log')
         try:
             result = subprocess.run(command, shell=True, check=True, capture_output=True, cwd=cwd)
         except subprocess.CalledProcessError as e:
-            command_error_logger.error(f'Command "{command}" failed with error: {e} in %s', self.config.test_dir)
+            command_error_logger.error(f'Command "{command}" failed with error: {e} in %s of %s', self.config.test_dir, self.config.output_path)
             return False
 
         if result.returncode != 0:

@@ -141,17 +141,37 @@ from patching.function import FunctionPatch
 #     patching = FunctionPatch(config)
 #     patching.patch_functions()
 #     i = i + 1
-angr.Project("/Users/sebastian/Tools/firmware-collection/libz.so.1_modified", auto_load_libs=False)
+# angr.Project("/Users/sebastian/Tools/firmware-collection/libz.so.1_modified", auto_load_libs=False)
 
 config = Config()
-config.binary_path = "/home/jaenich/CVE-bin-tool/karonte/NETGEAR/analyzed/R6200v2-V1.0.3.12_10.1.11/fw/_R6200v2-V1.0.3.12_10.1.11.chk.extracted/squashfs-root/lib/libz.so.1"
-config.output_path = "/home/jaenich/CVE-bin-tool/karonte/NETGEAR/analyzed/R6200v2-V1.0.3.12_10.1.11/fw/_R6200v2-V1.0.3.12_10.1.11.chk.extracted/squashfs-root/lib/libz.so.1_patched"
-config.functionName = "inflate_table"
+config.binary_path = "/home/jaenich/CVE-bin-tool/karonte/NETGEAR/analyzed/R8000-V1.0.4.4_1.1.42/fw/_R8000-V1.0.4.4_1.1.42.chk.extracted/squashfs-root/lib/libz.so"
+#config.binary_path = "/home/jaenich/CVE-bin-tool/karonte/NETGEAR/analyzed/R9000/firmware/squashfs-root/bin/busybox"
+# config.output_path = "/home/jaenich/CVE-bin-tool/karonte/NETGEAR/analyzed/R6200v2-V1.0.3.12_10.1.11/fw/_R6200v2-V1.0.3.12_10.1.11.chk.extracted/squashfs-root/lib/libz.so.1_patched"
+config.output_path = "/home/jaenich/CVE-bin-tool/libz.so_patched"
+config.functionName = "inflate"
+config.test_dir = "/home/jaenich/CVE-bin-tool/patched-lib-prepare/build/zlib/arm-linux-gnueabi-zlib-1.2.7-unique-BWhPorpX/zlib-1.2.7/libz.so.1.2.7"
 config.patch_path = "/home/jaenich/CVE-bin-tool/patched-lib-prepare/build/zlib/arm-linux-gnueabi-zlib-1.2.9/zlib-1.2.9/libz.so.1.2.9"
 
+p = angr.Project(config.binary_path, auto_load_libs=False)
+cfg = p.analyses.CFGFast()
 
-patching = FunctionPatch(config)
-patching.patch_functions()
+patch = angr.Project(config.test_dir, auto_load_libs=False)
+cfg_patch = patch.analyses.CFGFast()
+
+bindiff_results = p.analyses.BinDiff(patch, cfg_a=cfg, cfg_b=cfg_patch)
+
+
+entry_point_patch = patch.loader.find_symbol(config.functionName).rebased_addr
+print("ENTRY", entry_point_patch)
+
+if entry_point_patch in bindiff_results.function_matches:
+    print("nice")
+
+for r in bindiff_results.function_matches:
+    print(r)
+    
+#patching = FunctionPatch(config)
+#patching.patch_functions()
 # # # Setup logging to a filw
 # # logging.basicConfig(filename="/tmp/p_errors.txt", level=logging.ERROR,
 # #                     format='%(asctime)s - %(levelname)s - %(message)s', force=True)
@@ -221,7 +241,7 @@ patching.patch_functions()
 # #             ).vex
 # # statements =vex_block.statements
 # # print( "length",  cfge._iropt_level)
-# # print(statements[3])
+# # print(statements[3])/
 #
 # # 4364573, backup_state=None, byte_string=None, collect_data_refs=False, cross_insn_opt=False, extra_stop_points=None, initial_regs=None, insn_bytes=None
 #                                 # , insn_text=None, load_from_ro_regions=False, max_size=400, num_inst=None, opt_level=1, size=50, strict_block_end=False, thumb=True)

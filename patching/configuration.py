@@ -12,6 +12,7 @@ class Config:
         """
 
         self.functionName = None
+        self.vulnfunctionName = None
         self.binary_path = None
         self.patch_path = None
         self.output_path = None
@@ -20,6 +21,7 @@ class Config:
         self.product = None
         self.firmware = None
         self.test_binary = None
+        self.toolchain = None
 
     def readMagmaConfig(self, path, section):
         try:
@@ -30,6 +32,7 @@ class Config:
             # Get values from the configuration file
             self.functionName = config.get(section, "function.name")
             print("Hallo", self.functionName)
+            self.vulnfunctionName = self.functionName
             self.binary_path = config.get(section, "binary.path")
             self.patch_path = config.get(section, "patch.path")
             self.output_path = config.get(section, "output.path")

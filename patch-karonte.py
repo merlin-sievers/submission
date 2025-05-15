@@ -136,11 +136,11 @@ def evaluate_results(config, cwd):
 
 def karonte_job(result):
     supported_libs = {
-        #"zlib": ZlibUnitTest,
-        #"libpng": LibPNGUnitTest,
-        #"flac": LibFlacUnitTest,
+        "zlib": ZlibUnitTest,
+        "libpng": LibPNGUnitTest,
+        "flac": LibFlacUnitTest,
         "busybox": BusyBoxUnitTest,
-        #"libpcap": LibpcapUnitTest,
+        "libpcap": LibpcapUnitTest,
     }
 
 
@@ -153,7 +153,7 @@ def karonte_job(result):
         return
     if "vuln_test" in config.binary_path:
         return
-
+    config.toolchain = result["toolchain"]
     config.patch_path = result["patched_path"]
     config.product = result["product"]
     config.output_path = result["test_dir"] + "/" + result["product"] + "_" + result["cve"] + ".so"
@@ -168,7 +168,8 @@ def karonte_job(result):
         name = build.name
         config.test_binary = build.test_binary
         if result["cve"] in name:
-            config.functionName = name[result["cve"]]
+            config.functionName = name[result["cve"]][0]
+            config.vulnfunctionName =  name[result["cve"]][1]
         else:
             return
     else:
@@ -187,14 +188,16 @@ def karonte_job(result):
 
 if __name__ == "__main__":
 
+    import sys
     start = Config()
-    results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-busybox.json")
-    results_error_logger = get_error_logger("results_error.log")
-    results_success_logger = get_success_logger("results_success.log")
-    command_error_logger = get_error_logger("command_error.log")
-    success_logger = get_success_logger("success.log")
-    error_logger = get_error_logger("error.log")
-    match_logger = get_success_logger("match.log")
+    library = sys.argv[1]
+    results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-"+library+".json")
+    results_error_logger = get_error_logger("results_error-"+library+".log")
+    results_success_logger = get_success_logger("results_success-"+library+".log")
+    command_error_logger = get_error_logger("command_error-"+library+".log")
+    success_logger = get_success_logger("success-"+library+".log")
+    error_logger = get_error_logger("error-"+library+".log")
+    match_logger = get_success_logger("match-"+library+".log")
 
     # Save reference to the real print
     _real_print = builtins.print

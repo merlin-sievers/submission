@@ -59,10 +59,10 @@ class FunctionPatch(Patching):
 
 
     def start(self):
-        match_logger = logging.getLogger("match.log")
+        match_logger = logging.getLogger("match-"+self.patching_config.product+".log")
         self.limit = 1
         # TODO: Hack to extend segment and match afterwards
-        vuln = SectionExtender(self.patching_config.binary_path, 524288).add_section()
+        vuln = SectionExtender(self.patching_config.binary_path, 0x8000).add_section()
         if vuln is None:
             #raise Exception("Sections stripped")
             vuln = SectionExtender(self.patching_config.binary_path, 524288).add_section_with_program_header()
@@ -73,20 +73,20 @@ class FunctionPatch(Patching):
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
         print("\n\t Starting to analyze the vulnerable Program CFGFast...")
 
-        if self.project_vuln.loader.find_symbol(self.patching_config.functionName) is None:
+        if self.project_vuln.loader.find_symbol(self.patching_config.vulnfunctionName) is None:
             major = self.patching_config.version.split(".")
             major_version = major[0] + major[1]
             
-            #string = self.patching_config.test_binary
+            string = self.patching_config.test_binary
             #string = self.patching_config.test_dir + '/.libs/libpng' + major_version + '.so'
 #           string = self.patching_config.test_dir  +  '/src/libFLAC/.libs/libFLAC.so'
  #           string = self.patching_config.test_dir + '/libpcap.so.' + self.patching_config.version
-            string = self.patching_config.test_dir + '/busybox'
+            #string = self.patching_config.test_dir + '/busybox'
             project_help = angr.Project(string, auto_load_libs=False)
             if project_help is None:
                 raise Exception("wrong path")
             cfg = project_help.analyses.CFGFast()
-            entry_point = project_help.loader.find_symbol(self.patching_config.functionName).rebased_addr
+            entry_point = project_help.loader.find_symbol(self.patching_config.vulnfunctionName).rebased_addr
             bindiff_results = project_help.analyses.BinDiff(self.project_vuln, cfg_b=self.cfg_vuln, cfg_a=cfg, entry_point=entry_point)
             match = [e for (s, e) in bindiff_results.function_matches if s == entry_point]
             #match_logger.info("Entry %s", entry_point)
@@ -95,13 +95,13 @@ class FunctionPatch(Patching):
                 self.end_vuln = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
                 match_logger.info("Matched function %s in %s", self.entry_point_vuln, self.patching_config.binary_path)
             else:
-                print(self.patching_config.functionName + " not found in binary")
-                raise Exception("Function not found in binary", self.patching_config.functionName)
+                print(self.patching_config.vulnfunctionName + " not found in binary")
+                raise Exception("Function not found in binary", self.patching_config.vulnfunctionName)
         else:
-            self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.functionName).rebased_addr
+            self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.vulnfunctionName).rebased_addr
         # TODO: Find a better option to get the end
-            self.end_vuln = self.entry_point_vuln + self.project_vuln.loader.find_symbol(
-            self.patching_config.functionName).size
+            self.end_vuln = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
+
         print("\n\t Starting to analyze the vulnerable Program CFGEmul...")
 
         option = angr.sim_options.refs
@@ -123,9 +123,7 @@ class FunctionPatch(Patching):
         print("\n\t Starting to analyze the patch Program CFGFast...")
         self.cfg_patch = self.project_patch.analyses.CFGFast()
         self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
-        self.end_patch = self.entry_point_patch + self.project_patch.loader.find_symbol(
-            self.patching_config.functionName).size
-
+        self.end_patch = self.project_patch.kb.functions[self.entry_point_patch].size + self.entry_point_patch
         print("\n\t Starting to analyze the patch Program CFGEmul...")
         self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
                                                                            state_add_options=option,
@@ -454,6 +452,8 @@ class FunctionPatch(Patching):
             self.shifts_descending[-1].end = self.writing_address
 
         # Fix all References broken by shifts
+        
+        self.add_possible_magic_values()
 
         self.backend.apply_patches(self.patches)
 
@@ -1628,7 +1628,23 @@ class FunctionPatch(Patching):
                     fromAddress = fromAddress + jump_table.jumptable_entry_size
                     self.shift_references.append(shift_reference)
 
-    # Static methods
+
+    def add_possible_magic_values(self):
+        for reg in self.new_def_registers:
+            found = False
+            for k in self.used_registers.keys():
+                if reg.old_ldr_data_address == int(str(k),16):
+                    found = True
+                    if self.used_registers[k] == 0:
+                        byte_data = self.project_patch.loader.memory.load(reg.old_ldr_data_address, 4)
+                        patches = RawMemPatch(reg.ldr_data_address, byte_data)
+                        self.patches.append(patches)
+                        break
+            if not found:
+                byte_data = self.project_patch.loader.memory.load(reg.old_ldr_data_address, 4)
+                patches = RawMemPatch(reg.ldr_data_address, byte_data)
+                self.patches.append(patches)   # Static methods
+    
     @staticmethod
     def _reference_outside_of_patch(block_start, block_end, old_reference):
         if block_start.addr <= old_reference.toAddr <= block_end.addr + block_end.size:
