@@ -3,7 +3,6 @@ import subprocess
 import logging
 
 
-
 class LibpcapUnitTest(UnitTest):
 
     def __init__(self, config):
@@ -38,7 +37,7 @@ class LibpcapUnitTest(UnitTest):
         results_error_logger = logging.getLogger('results_error-'+self.config.product+'.log')
         results_success_logger = logging.getLogger('results_success-'+self.config.product+'.log')
         cwd = self.config.test_dir
-        command = f"grep -q 'Section Header Block in pcapng dump file has invalid length' test.log"
+        command = f"grep -q 'Section Header Block in pcap-ng dump file has a length of' test.log"
 
         result = subprocess.run(command, shell=True, capture_output=True, cwd=cwd)
 
