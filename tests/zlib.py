@@ -26,51 +26,17 @@ class ZlibUnitTest(UnitTest):
         import os
         os.environ['PATH'] = str(Path(f'/home/jaenich/CVE-bin-tool/patched-lib-prepare/toolchains/{self.config.toolchain}/output/host/bin').absolute()) + ':' + os.environ['PATH']
 
-        #     Build the unit tests
-       # command = f"cd {self.config.test_dir}"
-        #if not self.run_command(command, self.config.test_dir):
-         #   return False
-
-      #  command = f"chmod +x ./configure"
-       # if not self.run_command(command, self.config.test_dir):
-#            return False
-
-     #   command = f"CC='arm-linux-gnueabi-gcc' CFLAGS='-g -fno-stack-protector -mthumb' ./configure --shared"
- #       if not self.run_command(command, self.config.test_dir):
-  #          return False
-
-   #     command = f"make"
-    #    print(self.config.test_dir)
-     #   if not self.run_command(command, self.config.test_dir):
-      #      return False
-        
-        command = f"cp libz.so.{self.config.version} ../libz.so.{self.config.version}"
-        if not self.run_command(command, self.config.test_dir):
-            return False
-
-        command = f"cp {self.config.output_path} libz.so.{self.config.version}"
-        if not self.run_command(command, self.config.test_dir):
-            return False
-        
         ldpath = self.config.firmware.replace("usr/","")
         ldprefix = ldpath.replace("lib","")
-        command = f"QEMU_LD_PREFIX=/home/jaenich/CVE-bin-tool/patched-lib-prepare/toolchains/{self.config.toolchain}/output/host/{self.config.toolchain}/sysroot/ LD_LIBRARY_PATH=$PWD:{ldpath} make test > test.log 2>&1"
 
+        (Path(self.config.test_dir) / "patch-configuration").write_text(f'''
+firmware: {self.config.firmware}
+test_dir: {self.config.test_dir}
+patch_path: {self.config.patch_path}
+output_path: {self.config.output_path}
+                                                                        ''')
         command = f"QEMU_LD_PREFIX={ldprefix} LD_LIBRARY_PATH=$PWD make test > test.log 2>&1"
-        if not self.run_command(command, self.config.test_dir):
-            command = f"cp test.log {self.config.firmware}/test.log"
-            self.run_command(command, self.config.test_dir)
-            command = f"cp ../libz.so.{self.config.version}   libz.so.{self.config.version}"
-            self.run_command(command, self.config.test_dir)
-            return False
-
-        command = f"cp ../libz.so.{self.config.version}   libz.so.{self.config.version}"
-        self.run_command(command, self.config.test_dir)
-
-        command = f"cp test.log {self.config.firmware}/test.log"
-        self.run_command(command, self.config.test_dir)
-
-        return True
+        return self.run_command(command, self.config.test_dir)
 
     def evaluate_results(self):
         
