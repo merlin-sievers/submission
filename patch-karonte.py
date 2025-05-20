@@ -168,8 +168,13 @@ def karonte_job(result):
         name = build.name
         config.test_binary = build.test_binary
         if result["cve"] in name:
-            config.functionName = name[result["cve"]][0]
-            config.vulnfunctionName =  name[result["cve"]][1]
+            cve_tuple = name[result["cve"]]
+            config.functionName = cve_tuple[0]
+            config.vulnfunctionName =  cve_tuple[1]
+            if len(cve_tuple) > 2:
+                config.search_for_original = cve_tuple[2]
+            else:
+                config.search_for_original = False
         else:
             return
     else:

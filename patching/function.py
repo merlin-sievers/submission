@@ -31,6 +31,28 @@ class FunctionPatch(Patching):
         self.worklist = True
         self.thumb = 0
 
+    def try_harder_to_find_symbol(self, project, symbolname, no_original=False):
+        def symbol_mangler(original):
+            yield f'__real_{original}'
+            yield f'{original}.localalias'
+            yield f'{original}.alias'
+            if not no_original:
+                yield original
+
+        for candidate in symbol_mangler(symbolname):
+            symbol = project.loader.find_symbol(candidate)
+            if symbol:
+                return symbol
+            symbol = project.loader.main_object.get_symbol(candidate)
+            if symbol:
+                return symbol
+        ml = logging.getLogger('merlin.log')
+        ml.error(f'Failed to find symbol {symbolname}')
+        ml.error(f'plt {list(map(lambda x: x.name, project.loader.main_object.symbols))}')
+        return None
+
+    def find_symbol(self, project, symbolname):
+        return project.loader.find_symbol(symbolname)
 
     def patch_functions(self):
         logging.getLogger('angr').setLevel(logging.CRITICAL)
@@ -73,7 +95,7 @@ class FunctionPatch(Patching):
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
         print("\n\t Starting to analyze the vulnerable Program CFGFast...")
 
-        if self.project_vuln.loader.find_symbol(self.patching_config.vulnfunctionName) is None:
+        if self.try_harder_to_find_symbol(self.project_vuln, self.patching_config.vulnfunctionName, no_original=self.patching_config.search_for_original) is None:
             major = self.patching_config.version.split(".")
             major_version = major[0] + major[1]
             
@@ -86,7 +108,7 @@ class FunctionPatch(Patching):
             if project_help is None:
                 raise Exception("wrong path")
             cfg = project_help.analyses.CFGFast()
-            entry_point = project_help.loader.find_symbol(self.patching_config.vulnfunctionName).rebased_addr
+            entry_point = self.try_harder_to_find_symbol(project_help, self.patching_config.vulnfunctionName).rebased_addr
             bindiff_results = project_help.analyses.BinDiff(self.project_vuln, cfg_b=self.cfg_vuln, cfg_a=cfg, entry_point=entry_point)
             match = [e for (s, e) in bindiff_results.function_matches if s == entry_point]
             #match_logger.info("Entry %s", entry_point)
@@ -98,7 +120,7 @@ class FunctionPatch(Patching):
                 print(self.patching_config.vulnfunctionName + " not found in binary")
                 raise Exception("Function not found in binary", self.patching_config.vulnfunctionName)
         else:
-            self.entry_point_vuln = self.project_vuln.loader.find_symbol(self.patching_config.vulnfunctionName).rebased_addr
+            self.entry_point_vuln = self.try_harder_to_find_symbol(self.project_vuln, self.patching_config.vulnfunctionName, no_original=self.patching_config.search_for_original).rebased_addr
         # TODO: Find a better option to get the end
             self.end_vuln = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
 
@@ -122,7 +144,7 @@ class FunctionPatch(Patching):
 
         print("\n\t Starting to analyze the patch Program CFGFast...")
         self.cfg_patch = self.project_patch.analyses.CFGFast()
-        self.entry_point_patch = self.project_patch.loader.find_symbol(self.patching_config.functionName).rebased_addr
+        self.entry_point_patch = self.try_harder_to_find_symbol(self.project_patch, self.patching_config.functionName).rebased_addr
         self.end_patch = self.project_patch.kb.functions[self.entry_point_patch].size + self.entry_point_patch
         print("\n\t Starting to analyze the patch Program CFGEmul...")
         self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
@@ -186,7 +208,7 @@ class FunctionPatch(Patching):
         # self.patch_code_block_end = self.project_patch.factory.block(self.end_patch)
 
         with open("block.txt", 'a') as error_file:
-            error_message = f"BinaryName: {self.patching_config.binary_path} functionName: {self.patching_config.functionName} Function Size:{self.project_patch.loader.find_symbol(self.patching_config.functionName).size}  Patch Size: {self.patch_code_block_end.addr + self.patch_code_block_end.size - self.patch_code_block_start.addr}"
+            error_message = f"BinaryName: {self.patching_config.binary_path} functionName: {self.patching_config.functionName} Function Size:{self.try_harder_to_find_symbol(self.project_patch, self.patching_config.functionName).size}  Patch Size: {self.patch_code_block_end.addr + self.patch_code_block_end.size - self.patch_code_block_start.addr}"
             error_file.write(error_message + '\n')
 
         self.is_thumb = self.patch_code_block_start.thumb

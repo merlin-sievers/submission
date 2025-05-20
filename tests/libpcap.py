@@ -13,7 +13,7 @@ class LibpcapUnitTest(UnitTest):
         
  #       self.name["CVE-2011-1935"]= "pcap_activate_linux"
        # self.name["CVE-2024-8006"] = "pcap_findalldevs"
-        self.name["CVE-2019-15165"] = ("__real_pcap_ng_check_header","pcap_ng_check_header")
+        self.name["CVE-2019-15165"] = ("pcap_ng_check_header","pcap_ng_check_header")
        # self.name["CVE-2019-15161"] = "daemon_msg_findallif_req"
 
         self.test_binary = config.test_dir +  '/libpcap.so.' + config.version

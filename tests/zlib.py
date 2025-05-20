@@ -11,11 +11,11 @@ class ZlibUnitTest(UnitTest):
         self.name = dict()
         self.test_binary = None
 
-#       self.name["CVE-2016-9841"] = "inflate_fast"
- #       self.name["CVE-2016-9840"] = "inflate_table"
-  #      self.name["CVE-2016-9842"] = "inflateMark"
+  #     self.name["CVE-2016-9841"] = "inflate_fast"
+        self.name["CVE-2016-9840"] = ("inflate_table", "inflate_table")
+        self.name["CVE-2016-9842"] = ("inflateMark", "inflateMark")
         # name["CVE-2023-45853"] = "zipOpenNewFileInZip4_64"
-        self.name["CVE-2016-9843"] = ("crc32_big", "crc32_big")
+        self.name["CVE-2016-9843"] = ("crc32_z", "crc32")
         # name["CVE-2022-37434"] = "inflate"
         # name["CVE-2018-25032"] = "deflateInit2_"
         

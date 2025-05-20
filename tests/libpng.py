@@ -11,7 +11,7 @@ class LibPNGUnitTest(UnitTest):
         self.name = dict()
         self.test_binary = None
 
-        self.name["CVE-2016-10087"] = ("png_free_data.localalias", "png_free_data")
+        self.name["CVE-2016-10087"] = ("png_free_data", "png_free_data", False)
  #       self.name["CVE-2017-12652"] = ("png_read_chunk_header", "png_read_chunk_header")
 
         major = config.version.split(".")
