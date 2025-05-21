@@ -84,7 +84,7 @@ class FunctionPatch(Patching):
         match_logger = logging.getLogger("match-"+self.patching_config.product+".log")
         self.limit = 1
         # TODO: Hack to extend segment and match afterwards
-        vuln = SectionExtender(self.patching_config.binary_path, 0x8000).add_section()
+        vuln = SectionExtender(self.patching_config.binary_path, 0x80000).add_section()
         if vuln is None:
             #raise Exception("Sections stripped")
             vuln = SectionExtender(self.patching_config.binary_path, 524288).add_section_with_program_header()
