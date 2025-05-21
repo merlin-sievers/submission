@@ -3,26 +3,26 @@ name = "variable-backward-slice"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11.11"
+requires-python = ">=3.13"
 dependencies = [
-    "angr==9.2.72", 
+    "angr==9.2.72",
     "tracer==0.1",
     "claripy==9.2.72",
-    "setuptools==68.2.2",
+    "setuptools>=68.2.2",
     "monkeyhex==1.7.4",
     "archinfo==9.2.72",
     "networkx==3.1",
     # "eatcherex==1.2",  # Uncomment if needed
     "lief",
     "cle==9.2.72",
-    "pyelftools==0.30",
+    "pyelftools>=0.30",
     # "compilerex==0.1",  # Uncomment if needed
- #   "capstone==5.0.5",
+    #   "capstone==5.0.5",
     "fidget==0.1.3",
     "pyvex==9.2.72",
     "psutil==5.9.5",
     "termcolor==2.3.0",
-    "requests==2.31.0",
+    "requests>=2.31.0",
     "argparse==1.4.0",
     "bingraphvis==0.4.0",
     "pydot==1.4.2",
@@ -31,7 +31,8 @@ dependencies = [
     "compilerex",
     "povsim",
     "patcherex",
-    "angr-utils"	
+    "angr-utils",
+    "patched-lib-prepare",
 ]
 
 [tool.uv.sources]
@@ -41,3 +42,4 @@ patcherex = { git = "https://github.com/sjaenich/patcherex.git"}
 povsim = {git = "https://github.com/mechaphish/povsim.git"}
 lief = {git = "https://github.com/sjaenich/LIEF.git", branch = "plai-patch", subdirectory="api/python/"}
 compilerex = {git ="https://github.com/mechaphish/compilerex.git", rev="6d49822696915b947278030d3f708e2c50078264"}
+patched-lib-prepare = { git = "ssh://git@gitlab.ifi.lmu.de/sievers/patched-lib-prepare.git" }
