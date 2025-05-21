@@ -3,6 +3,58 @@ import angr
 from patching.reference import Reference
 from patching.configuration import Config
 
+from pathlib import Path
+import logging
+
+from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM, CS_MODE_THUMB
+
+def is_thunk(instrs):
+    if len(instrs) != 3:
+        return False
+    i1, i2, i3 = instrs[0:3]
+    return (
+        i1.mnemonic == "add" and i1.op_str.startswith("ip, pc") and
+        i2.mnemonic == "add" and "ip, ip" in i2.op_str and
+        i3.mnemonic == "ldr" and i3.op_str.startswith("pc, [ip") and "!" in i3.op_str
+    )
+
+def find_thunks(proj):
+
+    md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
+    md.detail = True
+
+    thunks = []
+
+    # Find all executable memory regions
+    exec_segments = [
+        seg for seg in proj.loader.main_object.segments
+    ]
+
+
+    # For each section, scan for the thunk pattern
+    for seg in exec_segments:
+        code = proj.loader.memory.load(seg.vaddr, seg.memsize)
+        instrs = list(md.disasm(code, seg.vaddr))
+
+        start = seg.vaddr
+        end = start + seg.memsize
+
+        addr = start
+        while addr < end - 12:
+            code = proj.loader.memory.load(addr, 12)
+            instrs = list(md.disasm(code, addr))
+            if is_thunk(instrs):
+                thunks.append(addr)
+                addr += 12
+            else:
+                addr += 2
+
+    names = list(proj.loader.main_object.jmprel.keys())
+    if len(names) != len(thunks):
+        return {}
+    name_to_thunk = {name: addr for name, addr in zip(names, thunks)}
+    return name_to_thunk
+
 
 class Matcher:
     def __init__(self, cfg_vuln, cfg_patch, project_vuln, project_patch):
@@ -53,6 +105,8 @@ class RefMatcher:
     def match_references_from_perfect_matched_blocks(self, perfect_matches, refs_vuln, refs_patch, project_vuln, project_patch, entryPoint, end):
         # TODO: Match References if they are in a perfectly matched BasicBlock in the Function and outside of the Function
         # self.bindiff_results = project_vuln.analyses.BinDiff(project_patch)
+
+        name_to_thunk_vuln = find_thunks(project_vuln)
 
         # get got address
         for sec in project_patch.loader.main_object.sections:
@@ -136,6 +190,14 @@ class RefMatcher:
                         else:
                             self.match_to_new_address.setdefault(ref.toAddr, []).append(new_ref)
                             self.match_to_old_address.setdefault(project_vuln.loader.main_object.plt[name], []).append(ref)
+                    else:
+                        try:
+                            thunk = name_to_thunk_vuln[name]
+                            new_ref = Reference(ref.fromAddr, thunk, ref.refType)
+                            self.match_to_new_address[ref.toAddr] = [new_ref]
+                            self.match_to_old_address[thunk] = [ref]
+                        except KeyError:
+                            pass
 
                 symbol = project_patch.loader.find_symbol(ref.toAddr)
                 if symbol is not None:
