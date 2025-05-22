@@ -116,13 +116,17 @@ class RefMatcher:
         help = [ref for ref in refs_patch if entryPoint <= ref <= end]
         print(len(help))
         for ref_patch in [ref for ref in refs_patch if entryPoint <= ref <= end]:
+
             if perfect_matches is not None:
-                relevant_addrs = [addr for addr in perfect_matches.match_new_address if 0 <= (ref_patch - addr) <= 80]
-                for addr in relevant_addrs:
-                    block_patch = project_patch.factory.block(addr)
+                try:
+                    bb_addr = max(filter(lambda x: x <= ref_patch, perfect_matches.match_new_address.keys()))
+                except ValueError:
+                    bb_addr = None
+                if bb_addr:
+                    block_patch = project_patch.factory.block(bb_addr)
                     if ref_patch in block_patch.instruction_addrs:
                         i = block_patch.instruction_addrs.index(ref_patch)
-                        block_vuln = project_vuln.factory.block(perfect_matches.match_new_address[addr])
+                        block_vuln = project_vuln.factory.block(perfect_matches.match_new_address[bb_addr])
                         if block_vuln.instruction_addrs[i] in refs_vuln:
                             self.match_from_new_address.setdefault(ref_patch, []).extend(refs_vuln[block_vuln.instruction_addrs[i]])
                             self.match_from_old_address.setdefault(refs_vuln[block_vuln.instruction_addrs[i]][0].fromAddr, []).extend(refs_patch[ref_patch])
@@ -260,6 +264,7 @@ class RefMatcher:
         if refs is None:
             return self.address_to_refs
 
+        ANGR_UNDEFINED_ADDR = 0x500000
         for refAddr in refs.kb.xrefs.xrefs_by_ins_addr:
             for r in refs.kb.xrefs.xrefs_by_ins_addr[refAddr]:
                 fromAddr = r.ins_addr
@@ -267,7 +272,7 @@ class RefMatcher:
                 refType = r.type_string
                 ref = Reference(fromAddr, toAddr, refType)
                 xrefs.add(ref)
-                if toAddr == 5242880 or toAddr == 0 or toAddr >= project.loader.main_object.max_addr:
+                if toAddr == ANGR_UNDEFINED_ADDR or toAddr == 0 or toAddr >= project.loader.main_object.max_addr:
                     pass
                 else:
                     if fromAddr not in self.address_to_refs:
