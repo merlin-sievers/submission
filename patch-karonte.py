@@ -196,7 +196,7 @@ if __name__ == "__main__":
     import sys
     start = Config()
     library = sys.argv[1]
-    results = start.readJsonConfig("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-"+library+".json")
+    results = start.readJsonConfigFile("/home/jaenich/CVE-bin-tool/patched-lib-prepare/results-"+library+".json")
     results_error_logger = get_error_logger("results_error-"+library+".log")
     results_success_logger = get_success_logger("results_success-"+library+".log")
     command_error_logger = get_error_logger("command_error-"+library+".log")

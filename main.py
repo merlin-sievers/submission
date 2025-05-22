@@ -76,7 +76,7 @@ from patching.function import FunctionPatch
 # # signal.signal(signal.SIGALRM, timeout_handler)
 # #
 # config = Config()
-# results = config.readJsonConfig("/Users/sebastian/PycharmProjects/cve-bin-tool/NetgearR6200_Test/results.json")
+# results = config.readJsonConfigFile("/Users/sebastian/PycharmProjects/cve-bin-tool/NetgearR6200_Test/results.json")
 # name = dict()
 # name["CVE-2016-9841"] = "inflate_table"
 # for r in results:

@@ -39,13 +39,16 @@ class Config:
         except configparser.Error as e:
             print("Error reading configuration:", e)
 
-    def readJsonConfig(self, json_path):
+    def readJsonConfigFile(self, json_path):
         with open(json_path, 'r') as f:
             data = json.load(f)
+        return self.readJsonConfig(data)
+
+    def readJsonConfig(self, json_data):
 
         results = []
 
-        for entry in data:
+        for entry in json_data:
             version = entry.get("version")
             patched_version = entry.get("patched_version")
             patched_version = patched_version.get("version")
