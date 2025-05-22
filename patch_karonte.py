@@ -173,8 +173,6 @@ def karonte_job(result):
             config.vulnfunctionName =  cve_tuple[1]
             if len(cve_tuple) > 2:
                 config.search_for_original = cve_tuple[2]
-            else:
-                config.search_for_original = False
         else:
             return
     else:

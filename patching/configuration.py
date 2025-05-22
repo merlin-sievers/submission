@@ -22,6 +22,7 @@ class Config:
         self.firmware = None
         self.test_binary = None
         self.toolchain = None
+        self.search_for_original = False
 
     def readMagmaConfig(self, path, section):
         try:
