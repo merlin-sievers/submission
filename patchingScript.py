@@ -52,12 +52,12 @@ def run_patching(config_path):
             signal.alarm(0)
         except TimeoutException as te:
             print(f"Operation for config {config} timed out")
-            logging.error("Timeout occurred for binary_path: %s functionName: %s", config.binary_path, config.functionName)
+            logging.error("Timeout occurred for binary_path: %s function name: %s", config.binary_path, config.fn_info.patch_fn)
             pass
         except Exception as e:
             print("Error occurred while patching:", e)
-            logging.error("An error occurred: %s binary_path: %s functionName: %s", e, config.binary_path,
-                          config.functionName)
+            logging.error("An error occurred: %s binary_path: %s function name: %s", e, config.binary_path,
+                          config.fn_info.patch_fn)
             pass
         finally:
             # Ensure the alarm is always disabled after each iteration

@@ -84,7 +84,7 @@ from patching.function import FunctionPatch
 #     config.patch_path = r["patched_path"]
 #     config.output_path = r["test_dir"] + "/" + r["product"] + "_" + r["cve"] + ".so"
 #     config.functionName = name[r["cve"]]
-#     if config.functionName is not None:
+#     if config.functionName:
 #         try:
 #             patching = FunctionPatch(config)
 #             patching.patch_functions()

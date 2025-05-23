@@ -8,6 +8,7 @@ from patcherex.patches import *
 
 from patching.analysis.backward_slice import VariableBackwardSlicing
 from patching.analysis.constraint_solver import ConstraintSolver
+from patching.configuration import Config
 from patching.matcher import Matcher
 from patching.matcher import RefMatcher
 from patcherex.backends.detourbackend import DetourBackend
@@ -20,7 +21,7 @@ import time
 
 
 class Patching:
-    def __init__(self, patching_config):
+    def __init__(self, patching_config: Config):
         # Start the timer
         self.cfge_patch_specific = None
         self.entry_point_patch = None
@@ -46,10 +47,10 @@ class Patching:
         self.code_block_end = None
         self.is_thumb = False
         self.start_address_of_patch = None
-        self.patching_config = patching_config
+        self.patching_config: Config = patching_config
         self.backend = None
         self.writing_address = None
-        self.new_added_function = dict()
+        self.new_added_function: dict[int, int] = dict()
 
         self.jump_tables = []
 

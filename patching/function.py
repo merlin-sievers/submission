@@ -49,9 +49,6 @@ class FunctionPatch(Patching):
             symbol = project.loader.main_object.get_symbol(candidate)
             if symbol:
                 return symbol
-        ml = logging.getLogger('merlin.log')
-        ml.error(f'Failed to find symbol {symbolname}')
-        ml.error(f'plt {list(map(lambda x: x.name, project.loader.main_object.symbols))}')
         return None
 
     def find_symbol(self, project: angr.Project, symbolname: str):
@@ -66,7 +63,7 @@ class FunctionPatch(Patching):
         initial.initial_patch()
 
         initial.patch()
-        patched_functions = []
+        patched_functions: list[int] = []
 
         function_list = list(initial.new_added_function)
         for function in function_list:
@@ -84,8 +81,7 @@ class FunctionPatch(Patching):
 
 
     def start(self):
-        match_logger = logging.getLogger("match-"+self.patching_config.product+".log")
-        self.limit = 1
+        self.limit: int = 1
         # TODO: Hack to extend segment and match afterwards
         vuln = SectionExtender(self.patching_config.binary_path, 0x80000).add_section()
         if vuln is None:
@@ -94,11 +90,11 @@ class FunctionPatch(Patching):
 
 
         # TODO: Add path to the binary as an argument for the configuration
-        self.project_vuln = angr.Project(vuln, auto_load_libs=False)
-        self.cfg_vuln = self.project_vuln.analyses.CFGFast()
+        self.project_vuln: angr.Project = angr.Project(vuln, auto_load_libs=False)
+        self.cfg_vuln: CFGFast = self.project_vuln.analyses.CFGFast()
         print("\n\t Starting to analyze the vulnerable Program CFGFast...")
 
-        vuln_symbol = self.try_harder_to_find_symbol(self.project_vuln, self.patching_config.fn_info.vuln_fn, search_original=self.patching_config.search_for_original)
+        vuln_symbol = self.try_harder_to_find_symbol(self.project_vuln, self.patching_config.fn_info.vuln_fn, search_original=self.patching_config.fn_info.search_for_original)
         if vuln_symbol is None:
             patch_log.info(f'could not find vuln fn {self.patching_config.fn_info.vuln_fn}')
             project_help = angr.Project(self.patching_config.test_binary, auto_load_libs=False)
@@ -120,7 +116,7 @@ class FunctionPatch(Patching):
             patch_log.info(f'Found vuln fn {self.patching_config.fn_info.vuln_fn}')
             self.entry_point_vuln: int = vuln_symbol.rebased_addr
         # TODO: Find a better option to get the end
-            self.end_vuln = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
+            self.end_vuln: int = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
 
         print("\n\t Starting to analyze the vulnerable Program CFGEmul...")
 
@@ -131,14 +127,14 @@ class FunctionPatch(Patching):
         # option.add(angr.sim_options.FAST_REGISTERS)
 
         # TODO: Check if the context_sensitivity_level is correct
-        self.cfge_vuln_specific = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
+        self.cfge_vuln_specific: CFGEmulated = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
                                                                          state_add_options=option,
                                                                          starts=[self.entry_point_vuln], call_depth=2)
 
-        self.project_patch = angr.Project(self.patching_config.patch_path, auto_load_libs=False)
+        self.project_patch: angr.Project = angr.Project(self.patching_config.patch_path, auto_load_libs=False)
         # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
 
-        # self.patching_config.functionName ="TIFFWriteDirectorySec.part.0"
+        # self.patching_config.fn_info.patch_fn ="TIFFWriteDirectorySec.part.0"
 
         print("\n\t Starting to analyze the patch Program CFGFast...")
         self.cfg_patch: CFGFast = self.project_patch.analyses.CFGFast()
@@ -147,12 +143,12 @@ class FunctionPatch(Patching):
         self.entry_point_patch: int = patch_symbol.rebased_addr
         self.end_patch: int = self.project_patch.kb.functions[self.entry_point_patch].size + self.entry_point_patch
         print("\n\t Starting to analyze the patch Program CFGEmul...")
-        self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
+        self.cfge_patch_specific: CFGEmulated = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
                                                                            state_add_options=option,
                                                                            starts=[self.entry_point_patch], call_depth=2)
 
         print("\n\t Starting to analyze the patch Program DDG...")
-        self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific,
+        self.ddg_patch_specific: DDG = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific,
                                                                   start=self.entry_point_patch)
         # self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
 
@@ -280,14 +276,14 @@ class FunctionPatch(Patching):
 
 
 
-    def additional_function(self, function_addr):
+    def additional_function(self, function_addr: int):
 
             function = self.project_patch.kb.functions.function(addr=function_addr)
             largest_block = max(function.blocks, key=lambda block: block.addr + block.size)
             function_end = largest_block.addr + largest_block.size
             self.end_patch = function_end
             print("function end", function_end)
-            self.entry_point_patch = function_addr
+            self.entry_point_patch: int = function_addr
             self.patch_code_block_end = max(function.blocks, key=lambda block: block.addr)
             self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
                                                                             state_add_options=angr.sim_options.refs,

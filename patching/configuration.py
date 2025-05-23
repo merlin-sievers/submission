@@ -22,7 +22,6 @@ class Config:
     toolchain: str = ''
     cve: str = ''
     fn_info: CVEFunctionInfo = field(default_factory=lambda: CVEFunctionInfo('',''))
-    search_for_original: bool = False
 
     def readMagmaConfig(self, path, section):
         try:

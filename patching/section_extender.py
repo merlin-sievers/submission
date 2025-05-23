@@ -25,6 +25,7 @@ class SectionExtender:
         """
         self.elf_file = elf_file
         self.additional_size = additional_size
+
     def extend_last_section_of_segment(self):
         # Load the ELF binary
         # config = lief.ELF.DYNSYM_COUNT_METHODS.SECTION
@@ -167,7 +168,7 @@ class SectionExtender:
         return output_file
 
 
-    def add_section(self):
+    def add_section(self) -> str | None:
         binary = lief.ELF.parse(self.elf_file)
         # binary1= lief.ELF.parse(self.elf_file)
         # Create a new section
@@ -355,7 +356,7 @@ class SectionExtender:
         binary.write(output_file)
         return output_file
 
-    def add_section_with_program_header(self):
+    def add_section_with_program_header(self) -> str:
 
         binary = lief.parse(self.elf_file)
         binary1 = lief.parse(self.elf_file)

@@ -1,14 +1,11 @@
 import angr
+from angr.analyses.bindiff import BinDiff
 
 from patching.reference import Reference
-from patching.configuration import Config
 
-from pathlib import Path
-import logging
+from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM, CsInsn
 
-from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM, CS_MODE_THUMB
-
-def is_thunk(instrs):
+def is_thunk(instrs: list[CsInsn]):
     if len(instrs) != 3:
         return False
     i1, i2, i3 = instrs[0:3]
@@ -18,12 +15,12 @@ def is_thunk(instrs):
         i3.mnemonic == "ldr" and i3.op_str.startswith("pc, [ip") and "!" in i3.op_str
     )
 
-def find_thunks(proj):
+def find_thunks(proj: angr.Project) -> dict[str, int]:
 
     md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
     md.detail = True
 
-    thunks = []
+    thunks: list[int] = []
 
     # Find all executable memory regions
     exec_segments = [
@@ -33,9 +30,6 @@ def find_thunks(proj):
 
     # For each section, scan for the thunk pattern
     for seg in exec_segments:
-        code = proj.loader.memory.load(seg.vaddr, seg.memsize)
-        instrs = list(md.disasm(code, seg.vaddr))
-
         start = seg.vaddr
         end = start + seg.memsize
 
@@ -49,7 +43,7 @@ def find_thunks(proj):
             else:
                 addr += 2
 
-    names = list(proj.loader.main_object.jmprel.keys())
+    names: list[str] = list(proj.loader.main_object.jmprel.keys())
     if len(names) != len(thunks):
         return {}
     name_to_thunk = {name: addr for name, addr in zip(names, thunks)}
@@ -62,7 +56,7 @@ class Matcher:
         self.match_new_address = dict()
 
         # Get angr BinDiff results
-        self.bindiff_results = project_vuln.analyses.BinDiff(project_patch, cfg_a=cfg_vuln, cfg_b=cfg_patch)
+        self.bindiff_results: BinDiff = project_vuln.analyses.BinDiff(project_patch, cfg_a=cfg_vuln, cfg_b=cfg_patch)
 
 
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
@@ -94,10 +88,10 @@ class RefMatcher:
     # TODO: Write constructor in a way that it takes the project of the vulnerable and the patched version and gets all the references
     def __init__(self, bindiff_results):
         self.bindiff_results = bindiff_results
-        self.match_to_old_address = dict()
-        self.match_to_new_address = dict()
-        self.match_from_old_address = dict()
-        self.match_from_new_address = dict()
+        self.match_to_old_address: dict[int, list[Reference]] = dict()
+        self.match_to_new_address: dict[int, list[Reference]] = dict()
+        self.match_from_old_address: dict[int, list[Reference]] = dict()
+        self.match_from_new_address: dict[int, list[Reference]] = dict()
 
         self.address_to_vuln_refs = dict()
         self.address_to_refs = dict()

@@ -42,7 +42,7 @@ evaluation_test_subjects = [
     TestSubject(
         'libpng',
         [
-            "CVE-2018-10087",
+            "CVE-2016-10087",
         ],
         ''
     ),
@@ -58,14 +58,14 @@ evaluation_test_subjects = [
         [
             "CVE-2020-22219",
         ],
-        'Os'
+        ''
     ),
     TestSubject(
         'busybox',
         [
             "CVE-2021-42386",
         ],
-        ''
+        'Os'
     ),
 ]
 
