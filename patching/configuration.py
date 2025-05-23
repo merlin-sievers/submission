@@ -1,28 +1,28 @@
 import configparser
+from dataclasses import dataclass, field
+from pathlib import Path
 import sqlite3
 import json
+from typing import Any
 
+from patched_lib_prepare.scan_entry import Result as PrepareResult
+
+from helpers import CVEFunctionInfo
+
+@dataclass
 class Config:
-
-    def __init__(self):
-        """
-        This class contains all the configuration parameters for the patching process
-        :param functionName:     String
-        :param binary_path:      String
-        """
-
-        self.functionName = None
-        self.vulnfunctionName = None
-        self.binary_path = None
-        self.patch_path = None
-        self.output_path = None
-        self.test_dir = None
-        self.version = None
-        self.product = None
-        self.firmware = None
-        self.test_binary = None
-        self.toolchain = None
-        self.search_for_original = False
+    binary_path: str = ''
+    patch_path: str = ''
+    output_path: str = ''
+    test_dir: str = ''
+    version: str = ''
+    product: str = ''
+    firmware: str = ''
+    test_binary: str = ''
+    toolchain: str = ''
+    cve: str = ''
+    fn_info: CVEFunctionInfo = field(default_factory=lambda: CVEFunctionInfo('',''))
+    search_for_original: bool = False
 
     def readMagmaConfig(self, path, section):
         try:
@@ -31,43 +31,91 @@ class Config:
             config.read(path)
 
             # Get values from the configuration file
-            self.functionName = config.get(section, "function.name")
-            print("Hallo", self.functionName)
-            self.vulnfunctionName = self.functionName
+            fn_name = config.get(section, "function.name")
+            self.fn_info = CVEFunctionInfo(
+                vuln_fn=fn_name,
+                patch_fn=fn_name
+            )
             self.binary_path = config.get(section, "binary.path")
             self.patch_path = config.get(section, "patch.path")
             self.output_path = config.get(section, "output.path")
         except configparser.Error as e:
             print("Error reading configuration:", e)
 
-    def readJsonConfigFile(self, json_path):
+    @classmethod
+    def fromPrepareResult(cls, prepResult: PrepareResult) -> list['Config']:
+        cfgs: list[Config] = []
+        for instance in prepResult.instances:
+
+            cfg = Config(
+                product=prepResult.product,
+                version=prepResult.version,
+                cve=prepResult.cve,
+                toolchain=instance.toolchain,
+                patch_path=instance.patched_path,
+                binary_path=instance.affected_path,
+                output_path=str(Path(instance.test_dir) / f'{prepResult.product}_{prepResult.cve}.so'),
+                test_dir=instance.test_dir,
+                firmware=str(Path(instance.affected_path).parent.absolute()),
+            )
+            cfgs.append(cfg)
+        return cfgs
+
+    @classmethod
+    def fromJsonConfigFile(cls, json_path: str) -> list['Config']:
         with open(json_path, 'r') as f:
-            data = json.load(f)
-        return self.readJsonConfig(data)
+            data: list[Any] = json.load(f)  # pyright:ignore[reportAny, reportExplicitAny]
+        return cls.fromJsonConfigs(data)
 
-    def readJsonConfig(self, json_data):
+    @classmethod
+    def readJsonConfig(cls, json_data: Any) -> 'Config':  # pyright:ignore[reportExplicitAny, reportAny]
+        config = Config()
+        config.binary_path = json_data["affected_path"]
+        if "modified" in config.binary_path:
+            raise ValueError
+        if "patched" in config.binary_path:
+            raise ValueError
+        if "vuln_test" in config.binary_path:
+            raise ValueError
+        config.toolchain = json_data["toolchain"]
+        config.patch_path = json_data["patched_path"]
+        config.product = json_data["product"]
+        config.output_path = json_data["test_dir"] + "/" + json_data["product"] + "_" + json_data["cve"] + ".so"
+        config.test_dir = json_data["test_dir"]
+        config.product = json_data["product"]
+        config.version = json_data["version"]
+        config.firmware = str(Path(config.binary_path).parent.absolute())
+        return config
 
-        results = []
+    @classmethod
+    def fromJsonConfigs(cls, data: list[Any]) -> list['Config']:  # pyright:ignore[reportExplicitAny]
 
-        for entry in json_data:
-            version = entry.get("version")
-            patched_version = entry.get("patched_version")
-            patched_version = patched_version.get("version")
-            product = entry.get("product")
-            cve = entry.get("cve")
-            instances = entry.get("instances", [])
+        results: list['Config'] = []
 
-            for instance in instances:
-                results.append({
-                    "product": product,
-                    "cve": cve,
-                    "affected_version": version,
-                    "patched_version": patched_version,
-                    "affected_path": instance.get("affected_path"),
-                    "patched_path": instance.get("patched_path"),
-                    "toolchain": instance.get("toolchain"),
-                    "test_dir": instance.get("test_dir")
-                })
+        for entry in data:  # pyright:ignore[reportAny]
+            try:
+                cfg = cls.readJsonConfig(entry)
+                results.append(cfg)
+            except ValueError:
+                pass
+            # version = entry.get("version")
+            # patched_version = entry.get("patched_version")
+            # patched_version = patched_version.get("version")
+            # product = entry.get("product")
+            # cve = entry.get("cve")
+            # instances = entry.get("instances", [])
+            #
+            # for instance in instances:
+            #     results.append({
+            #         "product": product,
+            #         "cve": cve,
+            #         "affected_version": version,
+            #         "patched_version": patched_version,
+            #         "affected_path": instance.get("affected_path"),
+            #         "patched_path": instance.get("patched_path"),
+            #         "toolchain": instance.get("toolchain"),
+            #         "test_dir": instance.get("test_dir")
+            #     })
 
         return results
 
