@@ -3,9 +3,15 @@ import re
 import pickle
 import os
 import angr
+from angr.analyses.ddg import DDG
+from angr.analyses.cfg.cfg_emulated import CFGEmulated
+from angr.analyses.cfg.cfg_fast import CFGFast
 from angr.sim_variable import SimRegisterVariable, SimTemporaryVariable, SimMemoryVariable
 
+from cle import Symbol
 from patcherex.patches import *
+from log import patch_log
+from patching.configuration import Config
 from patching.patching import Patching
 from patching.analysis.backward_slice import VariableBackwardSlicing
 from patching.analysis.constraint_solver import ConstraintSolver
@@ -23,24 +29,21 @@ import logging
 
 class FunctionPatch(Patching):
 
-
-
-
-    def __init__(self, patching_config):
+    def __init__(self, patching_config: Config):
         super().__init__(patching_config)
         self.worklist = True
         self.thumb = 0
 
-    def try_harder_to_find_symbol(self, project, symbolname, no_original=False):
-        def symbol_mangler(original):
+    def try_harder_to_find_symbol(self, project: angr.Project, symbolname: str, search_original: bool = True) -> Symbol | None:
+        def symbol_mangler(original: str):
             yield f'__real_{original}'
             yield f'{original}.localalias'
             yield f'{original}.alias'
-            if not no_original:
+            if search_original:
                 yield original
 
         for candidate in symbol_mangler(symbolname):
-            symbol = project.loader.find_symbol(candidate)
+            symbol = project.loader.find_symbol(candidate)  # pyright:ignore[reportUnknownMemberType]
             if symbol:
                 return symbol
             symbol = project.loader.main_object.get_symbol(candidate)
@@ -51,8 +54,8 @@ class FunctionPatch(Patching):
         ml.error(f'plt {list(map(lambda x: x.name, project.loader.main_object.symbols))}')
         return None
 
-    def find_symbol(self, project, symbolname):
-        return project.loader.find_symbol(symbolname)
+    def find_symbol(self, project: angr.Project, symbolname: str):
+        return project.loader.find_symbol(symbolname)  # pyright:ignore[reportUnknownMemberType]
 
     def patch_functions(self):
         logging.getLogger('angr').setLevel(logging.CRITICAL)
@@ -95,32 +98,27 @@ class FunctionPatch(Patching):
         self.cfg_vuln = self.project_vuln.analyses.CFGFast()
         print("\n\t Starting to analyze the vulnerable Program CFGFast...")
 
-        if self.try_harder_to_find_symbol(self.project_vuln, self.patching_config.vulnfunctionName, no_original=self.patching_config.search_for_original) is None:
-            major = self.patching_config.version.split(".")
-            major_version = major[0] + major[1]
-            
-            string = self.patching_config.test_binary
-            #string = self.patching_config.test_dir + '/.libs/libpng' + major_version + '.so'
-#           string = self.patching_config.test_dir  +  '/src/libFLAC/.libs/libFLAC.so'
- #           string = self.patching_config.test_dir + '/libpcap.so.' + self.patching_config.version
-            #string = self.patching_config.test_dir + '/busybox'
-            project_help = angr.Project(string, auto_load_libs=False)
-            if project_help is None:
-                raise Exception("wrong path")
+        vuln_symbol = self.try_harder_to_find_symbol(self.project_vuln, self.patching_config.fn_info.vuln_fn, search_original=self.patching_config.search_for_original)
+        if vuln_symbol is None:
+            patch_log.info(f'could not find vuln fn {self.patching_config.fn_info.vuln_fn}')
+            project_help = angr.Project(self.patching_config.test_binary, auto_load_libs=False)
             cfg = project_help.analyses.CFGFast()
-            entry_point = self.try_harder_to_find_symbol(project_help, self.patching_config.vulnfunctionName).rebased_addr
+            help_symbol = self.try_harder_to_find_symbol(project_help, self.patching_config.fn_info.vuln_fn)
+            assert help_symbol
+            entry_point: int = help_symbol.rebased_addr  # pyright:ignore[reportUnknownMemberType]
             bindiff_results = project_help.analyses.BinDiff(self.project_vuln, cfg_b=self.cfg_vuln, cfg_a=cfg, entry_point=entry_point)
             match = [e for (s, e) in bindiff_results.function_matches if s == entry_point]
-            #match_logger.info("Entry %s", entry_point)
+            #patch_log.info("Entry %s", entry_point)
             if len(match) > 0:
                 self.entry_point_vuln = match[0]
                 self.end_vuln = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
-                match_logger.info("Matched function %s in %s", self.entry_point_vuln, self.patching_config.binary_path)
+                patch_log.info("Matched function %s in %s", hex(self.entry_point_vuln), self.patching_config.binary_path)
             else:
-                print(self.patching_config.vulnfunctionName + " not found in binary")
-                raise Exception("Function not found in binary", self.patching_config.vulnfunctionName)
+                print(self.patching_config.fn_info.vuln_fn + " not found in binary")
+                raise Exception("Function not found in binary", self.patching_config.fn_info.vuln_fn)
         else:
-            self.entry_point_vuln = self.try_harder_to_find_symbol(self.project_vuln, self.patching_config.vulnfunctionName, no_original=self.patching_config.search_for_original).rebased_addr
+            patch_log.info(f'Found vuln fn {self.patching_config.fn_info.vuln_fn}')
+            self.entry_point_vuln: int = vuln_symbol.rebased_addr
         # TODO: Find a better option to get the end
             self.end_vuln = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
 
@@ -143,9 +141,11 @@ class FunctionPatch(Patching):
         # self.patching_config.functionName ="TIFFWriteDirectorySec.part.0"
 
         print("\n\t Starting to analyze the patch Program CFGFast...")
-        self.cfg_patch = self.project_patch.analyses.CFGFast()
-        self.entry_point_patch = self.try_harder_to_find_symbol(self.project_patch, self.patching_config.functionName).rebased_addr
-        self.end_patch = self.project_patch.kb.functions[self.entry_point_patch].size + self.entry_point_patch
+        self.cfg_patch: CFGFast = self.project_patch.analyses.CFGFast()
+        patch_symbol = self.try_harder_to_find_symbol(self.project_patch, self.patching_config.fn_info.patch_fn)
+        assert patch_symbol
+        self.entry_point_patch: int = patch_symbol.rebased_addr
+        self.end_patch: int = self.project_patch.kb.functions[self.entry_point_patch].size + self.entry_point_patch
         print("\n\t Starting to analyze the patch Program CFGEmul...")
         self.cfge_patch_specific = self.project_patch.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
                                                                            state_add_options=option,
@@ -208,7 +208,7 @@ class FunctionPatch(Patching):
         # self.patch_code_block_end = self.project_patch.factory.block(self.end_patch)
 
         with open("block.txt", 'a') as error_file:
-            error_message = f"BinaryName: {self.patching_config.binary_path} functionName: {self.patching_config.functionName} Function Size:{self.try_harder_to_find_symbol(self.project_patch, self.patching_config.functionName).size}  Patch Size: {self.patch_code_block_end.addr + self.patch_code_block_end.size - self.patch_code_block_start.addr}"
+            error_message = f"BinaryName: {self.patching_config.binary_path} function name: {self.patching_config.fn_info.patch_fn} Function Size:{self.try_harder_to_find_symbol(self.project_patch, self.patching_config.fn_info.patch_fn).size}  Patch Size: {self.patch_code_block_end.addr + self.patch_code_block_end.size - self.patch_code_block_start.addr}"
             error_file.write(error_message + '\n')
 
         self.is_thumb = self.patch_code_block_start.thumb
