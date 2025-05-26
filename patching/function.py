@@ -75,21 +75,15 @@ class FunctionPatch(Patching):
             set1 = set(function_list)
             function_list.extend(x for x in initial.new_added_function if x not in set1)
             initial.patch()
-                # Add only unique elements
-
 
 
 
     def start(self):
         self.limit: int = 1
-        # TODO: Hack to extend segment and match afterwards
         vuln = SectionExtender(self.patching_config.binary_path, 0x80000).add_section()
         if vuln is None:
-            #raise Exception("Sections stripped")
             vuln = SectionExtender(self.patching_config.binary_path, 524288).add_section_with_program_header()
 
-
-        # TODO: Add path to the binary as an argument for the configuration
         self.project_vuln: angr.Project = angr.Project(vuln, auto_load_libs=False)
         self.cfg_vuln: CFGFast = self.project_vuln.analyses.CFGFast()
         print("\n\t Starting to analyze the vulnerable Program CFGFast...")
@@ -104,7 +98,7 @@ class FunctionPatch(Patching):
             entry_point: int = help_symbol.rebased_addr  # pyright:ignore[reportUnknownMemberType]
             bindiff_results = project_help.analyses.BinDiff(self.project_vuln, cfg_b=self.cfg_vuln, cfg_a=cfg, entry_point=entry_point)
             match = [e for (s, e) in bindiff_results.function_matches if s == entry_point]
-            #patch_log.info("Entry %s", entry_point)
+
             if len(match) > 0:
                 self.entry_point_vuln = match[0]
                 self.end_vuln = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
@@ -116,26 +110,17 @@ class FunctionPatch(Patching):
         else:
             patch_log.info(f'Found vuln fn {self.patching_config.fn_info.vuln_fn}')
             self.entry_point_vuln: int = vuln_symbol.rebased_addr
-        # TODO: Find a better option to get the end
             self.end_vuln: int = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
 
         print("\n\t Starting to analyze the vulnerable Program CFGEmul...")
 
         option = angr.sim_options.refs
-        # option = angr.sim_options.resilience
-        # option = angr.sim_options.modes["fastpath"]
-        # option.add(angr.sim_options.FAST_MEMORY)
-        # option.add(angr.sim_options.FAST_REGISTERS)
 
-        # TODO: Check if the context_sensitivity_level is correct
         self.cfge_vuln_specific: CFGEmulated = self.project_vuln.analyses.CFGEmulated(keep_state=True, context_sensitivity_level=0,
                                                                          state_add_options=option,
                                                                          starts=[self.entry_point_vuln], call_depth=2)
 
         self.project_patch: angr.Project = angr.Project(self.patching_config.patch_path, auto_load_libs=False)
-        # self.project_patch = angr.Project("/Users/sebastian/PycharmProjects/angrProject/Testsuite/ReferenceTest/patch_test_4", auto_load_libs= False)
-
-        # self.patching_config.fn_info.patch_fn ="TIFFWriteDirectorySec.part.0"
 
         print("\n\t Starting to analyze the patch Program CFGFast...")
         self.cfg_patch: CFGFast = self.project_patch.analyses.CFGFast()
@@ -151,7 +136,6 @@ class FunctionPatch(Patching):
         print("\n\t Starting to analyze the patch Program DDG...")
         self.ddg_patch_specific: DDG = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific,
                                                                   start=self.entry_point_patch)
-        # self.cdg_patch_specific = self.project_patch.analyses.CDG(cfg=self.cfge_patch_specific, start=self.entry_point_patch)
 
     def initial_patch(self):
         print("\n\t Starting Patching Process...")
