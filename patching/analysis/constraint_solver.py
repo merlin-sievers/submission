@@ -54,20 +54,16 @@ class ConstraintSolver:
         # Iterating over the instruction addresses in the slice
         for address, ids in sorted(list(slice.items())):
             size = max([id for id, ins_addr in ids])
-            # print("Address", hex(address), "Size", size)
+
 
             block = self.project.factory.block(address)
             vex_block = block.vex
             statements =vex_block.statements
             thumb = block.thumb
-
-            # TODO: Change so that you iterate through all possible basic blocks to find the correct one
             nodes = cfge_patch_specific.get_all_nodes(address)
             if len(nodes) >1:
-                print("Oh no")
                 block = self.project.factory.fresh_block(address, size=75)
             elif (len(vex_block.statements) <= size):
-
                 vex_block = block._vex_engine.lift_vex(
                     arch=self.project.arch,
                     clemory=None,
@@ -90,13 +86,11 @@ class ConstraintSolver:
                     statements = vex_block.statements
                     bool = False
                     while i >= 0:
-                        # print("ID", id, "Ins_addr", ins_addr, "I", i, "Block size", len(vex_block.statements))
                         if thumb:
                             ins_addr = ins_addr - 1
                         help_statement = statements[i]
                         if help_statement.tag == "Ist_IMark":
                             if help_statement.addr != (ins_addr):
-                                print("Problem")
                                 vex_block = block._vex_engine.lift_vex(
                     arch=self.project.arch,
                     clemory=None,
@@ -118,13 +112,10 @@ class ConstraintSolver:
                     if bool:
                         break
             else:
-                # block = self.project.factory.fresh_block(address, 75)
-                # vex_block = block.vex
                 for id, ins_addr in ids:
                     i = id
                     bool = False
                     while i > 0:
-                        # print("ID", id, "Ins_addr", ins_addr, "I", i, "Block size", len(vex_block.statements))
                         if thumb:
                             ins_addr = ins_addr - 1
                         help_statement = statements[i]
@@ -152,47 +143,22 @@ class ConstraintSolver:
                     if bool:
                         break
 
-
-
-            # print(len(block.vex.statements), size)
-            # if len(block.vex.statements) <= size:
-            #     block = cfge_patch_specific.project.factory.block(address, size=size)
-            # , size = 75
-            # block.pp()
-            # print("Address", hex(address))
-            # nodes = self.project.kb.cfgs.cfgs["CFGEmulated"].get_all_nodes(address)
-            # largest_node = max(nodes, key=lambda node: node.size)
-            # block = largest_node.block
-
-
             self.basic_block_ssa = str(j) + "b"
             j = j+1
-            # print(len(block.vex.statements), size)
-
             # Now iterate over the vex statements of the instruction
             for id, ins_addr in sorted(ids):
 
                 if thumb:
                     ins_addr = ins_addr - 1
-            #TODO BAD HACK CHANGE IT!!!
                 if(len(vex_block.statements) > id):
                     statement = vex_block.statements[id]
                 else:
-                    print("it happened again")
                     continue
 
                 if self.handle_vex_statement(statement, ins_addr, writing_address):
-                    # To debug solver we need to push the assertions
-
-                    print("Statement", statement)
-
                     continue
                 else:
                     break
-
-        # Solve equation system so that it jumps to the target
-
-
         new_target = z3.BitVecVal(jump_target, 32)
 
         if self.variables == []:
@@ -221,20 +187,7 @@ class ConstraintSolver:
         if len(self.used_registers) == 0:
             self.used_registers.append(register)
 
-        # if self.new_def_registers is not None:
-        #     for reg in self.new_def_registers:
-        #         string = "r" + str(self.project.arch.registers[reg.register_name][0])
-        #         print("Register Name", string)
-        #         register = z3.BitVec(string, 32)
-        #         if register in self.variables:
-        #             new_target = z3.BitVecVal(reg.ldr_data_address, 32)
-        #             # register =  z3.BitVec(string, 32)
-        #             self.solver.add(register == new_target)
-
-        print("Last Constraint", self.used_registers[0], "==", new_target)
-
         self.solver.add(self.used_registers[0] == new_target)
-
 
         # Add Constraints for already written values in the registers
         for reg in written_registers:
@@ -242,24 +195,12 @@ class ConstraintSolver:
             expr = z3.BitVecVal(written_registers[reg], 32)
             self.solver.add(var == expr)
 
-        print("Solver", self.solver)
         if self.solver.check() == z3.sat:
-        # Get the model
-            print("solvable")
             model = self.solver.model()
-        # Get the values of variables
-        #     for itReg in inputs:
-        #         relevantRegister = itReg
-        #     for equation in self.solver.assertions():
-                # print("\n\t", equation)
-            print("Model", model)
             for decl in model.decls():
-
                 variable = model.eval(decl(), True)
-                print("var\n\t", decl, variable)
                 result = (decl, variable)
                 results.append(result)
-
         return results
 
 
@@ -322,11 +263,9 @@ class ConstraintSolver:
 
 
     def _handle_vex_stmt_PutI(self, statement, address, writing_address):
-        print("PutI", statement)
         pass
 
     def _handle_vex_stmt_Store(self, statement, address, writing_address):
-        print("Store", statement)
         pass
 
     def _handle_vex_stmt_LoadG(self, statement, address, writing_address):
@@ -343,7 +282,6 @@ class ConstraintSolver:
         return True
 
     def _handle_vex_stmt_StoreG(self, statement, address, writing_address):
-        # print("StoreG", statement)
         if statement.addr.tag_int == 11:
             load = z3.BitVec(str(statement.addr), 32)
         else:
@@ -353,36 +291,27 @@ class ConstraintSolver:
         self.variables.append(load)
         self.solver.add(load == alt)
         return True
-        pass
 
     def _handle_vex_stmt_CAS(self, statement, address, writing_address):
-        print("CAS", statement)
         pass
 
     def _handle_vex_stmt_LLSC(self, statement, address, writing_address):
-        print("LLSC", statement)
         pass
 
     def _handle_vex_stmt_Dirty(self, statement, address, writing_address):
-        print("Dirty", statement)
         pass
 
     def _handle_vex_stmt_MBE(self, statement, address, writing_address):
-        print("MBE", statement)
         pass
 
     def _handle_vex_stmt_Exit(self, statement, address, writing_address):
-        print("Exit", statement)
         pass
 
 
 
 
     # Expression Handlers
-
-
     def _handle_vex_expr_Binder(self, expression, address, writing_address):
-        print("Binder", expression)
         pass
 
     def _handle_vex_expr_Get(self, expression, address, writing_address):
@@ -395,7 +324,6 @@ class ConstraintSolver:
         return register
 
     def _handle_vex_expr_GetI(self, expression, address, writing_address):
-        print("GetI", expression)
         pass
 
     def _handle_vex_expr_RdTmp(self, expression, address, writing_address):
@@ -403,11 +331,9 @@ class ConstraintSolver:
         self.variables.append(variable)
         return variable
     def _handle_vex_expr_Qop(self, expression, address, writing_address):
-        print("Qop", expression)
         pass
 
     def _handle_vex_expr_Triop(self, expression, address, writing_address):
-        print("Triop", expression)
         pass
 
     def _handle_vex_expr_Binop(self, expression, address, writing_address):
@@ -438,7 +364,6 @@ class ConstraintSolver:
 
 
     def _handle_vex_expr_Unop(self, expression, address, writing_address):
-        print("Unop", expression)
         pass
 
     def _handle_vex_expr_Load(self, expression, address, writing_address):
@@ -446,16 +371,13 @@ class ConstraintSolver:
             load = z3.BitVec(str(expression.addr), 32)
         else:
             load = z3.BitVec("t" + self.basic_block_ssa + str(expression.addr.tmp), 32)
-        # load = z3.BitVec(str(expression.addr), 32)
         self.variables.append(load)
         return load
 
-    # TODO: Validate that i consider every constant bigger than 20000 to be an address//  Could use the entry point of the program here...
     def _handle_vex_expr_Const(self, expression, address, writing_address):
         new_address = expression.con.value + writing_address - self.start_address
 
         if expression.con.value > 20000:
-            expr = z3.BitVecVal(new_address, 32)
             for reg in self.written_registers:
                 if self.written_registers[reg] == expression.con.value:
                     expr = z3.BitVec(str(hex(expression.con.value)), 32)
@@ -478,9 +400,7 @@ class ConstraintSolver:
         return expression
 
     def _handle_vex_expr_VECRET(self, expression, address, writing_address):
-        print("VECRET", expression)
         pass
 
     def _handle_vex_expr_GSPTR(self, expression, address, writing_address):
-        print("GSPTR", expression)
         pass

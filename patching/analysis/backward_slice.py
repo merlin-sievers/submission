@@ -65,16 +65,6 @@ class VariableBackwardSlicing(BackwardSlice):
         if cfg_node is not None or stmt_id is not None:
             self._targets = [(cfg_node, stmt_id)]
 
-        # if targets is not None:
-        #     for t in targets:
-        #         if isinstance(t, CodeLocation):
-        #             node = self._cfg.model.get_any_node(t.block_addr)
-        #             self._targets.append((node, t.stmt_idx))
-        #         elif type(t) is tuple:
-        #             self._targets.append(t)
-        #         else:
-        #             raise AngrBackwardSlicingError("Unsupported type of target %s" % t)
-
         # Save a list of taints to begin with at the beginning of each SimRun
         self.initial_taints_per_run = None
         self.runs_in_slice = None
@@ -93,7 +83,6 @@ class VariableBackwardSlicing(BackwardSlice):
 
     def _construct_default(self, targets, var):
         """
-        TODO: Update description to reflect the new implementation of backward slicing with a variable.
         Create a backward slice from a specific statement in a specific block. This is done by traverse the CFG
         backwards, and mark all tainted statements based on dependence graphs (CDG and DDG) provided initially. The
         traversal terminated when we reach the entry point, or when there is no unresolved dependencies.
@@ -103,8 +92,6 @@ class VariableBackwardSlicing(BackwardSlice):
                         statement where the backward slice starts.
         :param var:     The variable to slice on.
         """
-        print("Erste variable", var)
-
         if isinstance(var, ProgramVariable):
             self._alternativ_worklist(var)
         else:
@@ -120,13 +107,8 @@ class VariableBackwardSlicing(BackwardSlice):
         """
         vars_to_remove = set()
         vars_to_add = set()
-        print("Here we go" , cl)
         for vars in variables:
-            # print("Variable", type(vars))
-
             if self._ddg is not None and cl in self._ddg:
-                # definitions = self._ddg.view[cl.ins_addr].definitions
-                # print("in DDG")
                 definitions = self._ddg.find_definitions(vars, cl, simplified_graph=False)
                 for definition in definitions:
                     print(definition)
@@ -144,11 +126,9 @@ class VariableBackwardSlicing(BackwardSlice):
                                     vars_to_add.add(var_dep._variable.variable)
 
         for vars in vars_to_remove:
-            print("remove", vars)
             variables.remove(vars)
 
         for vars in vars_to_add:
-            print("add", vars)
             variables.add(vars)
 
         return variables
@@ -166,8 +146,6 @@ class VariableBackwardSlicing(BackwardSlice):
             in_edges = self._ddg.data_graph.in_edges(definition, data=True)
             if self.offset:
                 for src, _, data in in_edges:
-                    # if "type" in data and data["type"] == "kill":
-                    #     continue
                     if isinstance(src.variable, SimTemporaryVariable):
                         if src not in traversed:
                             defs.append(src)
@@ -218,8 +196,6 @@ class VariableBackwardSlicing(BackwardSlice):
         worklist = set()
         for start in starts:
             worklist.add(start)
-
-
         self.taint_graph = networkx.DiGraph()
 
         # Initialize variables (abstract State)
@@ -230,9 +206,6 @@ class VariableBackwardSlicing(BackwardSlice):
 
         while worklist:
             node = worklist.pop()
-            # y = f_i(x_1,..., x_n)
-            # node = CodeLocation(node[0].addr, node[1])
-            print("Worklist remove", node)
             accessed_taints.add(node)
             variables = self._constraint_function(node, variables)
             if variables:
@@ -241,23 +214,11 @@ class VariableBackwardSlicing(BackwardSlice):
                     if isinstance(self._ddg, networkx.DiGraph):
                         predecessors = list(self._ddg.predecessors(node))
                     else:
-                        # angr.analyses.DDG
                         predecessors = list(self._ddg.get_predecessors(node))
 
                     for p in predecessors:
-                        print("Worklist Add", p)
                         worklist.add(p)
-
                         self.taint_graph.add_edge(p, node)
-
-                # for n in self._cfg.model.get_all_nodes(node.block_addr):
-                #     new_taints = self._handle_control_dependence(n)
-                #
-                #     for taint in new_taints:
-                #         if taint not in accessed_taints:
-                #             worklist.add(taint)
-                #
-                #         self.taint_graph.add_edge(taint, node)
 
         self._map_to_cfg()
         print(self.chosen_statements)
