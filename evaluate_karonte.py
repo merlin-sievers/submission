@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass, field
 from itertools import chain
 from pathlib import Path
 
-from patched_lib_prepare.prepare_libs import read_scans, prepare
+from patched_lib_prepare.prepare_libs import read_scans, prepare, assert_karonte_exists
 from patched_lib_prepare.scan_entry import Result as PrepareResult, ScanEntry
 from parallel import patch_and_test_parallely
 from patching.configuration import Config
@@ -82,7 +82,7 @@ def main():
     builtins.print = mute_print
 
     karonte_dir = Path(args.karonte_dir)  # pyright:ignore[reportAny]
-    assert karonte_dir.exists()
+    assert_karonte_exists(karonte_dir)
     full_scan_json_path = Path(args.full_scan_json)  # pyright:ignore[reportAny]
     assert full_scan_json_path.parent.exists()
 
