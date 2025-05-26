@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from subprocess import run
 from log import eval_log, mute_other_loggers
 mute_other_loggers()
 
@@ -20,7 +21,7 @@ from patched_lib_prepare.scan_entry import Result as PrepareResult, ScanEntry
 from parallel import patch_and_test_parallely
 from patching.configuration import Config
 
-locks = None
+EVAL_RESULTS_PATH: Path = Path('eval-results.json')
 
 @dataclass
 class TestSubject:
@@ -62,6 +63,7 @@ evaluation_test_subjects = [
     ),
 ]
 
+
 def main():
     global evaluation_test_subjects
 
@@ -77,10 +79,6 @@ def main():
 
     args = parser.parse_args()
 
-    def mute_print(*_args, **_kwargs):  # pyright:ignore[reportUnknownParameterType,reportMissingParameterType]
-        pass
-    builtins.print = mute_print
-
     karonte_dir = Path(args.karonte_dir)  # pyright:ignore[reportAny]
     assert_karonte_exists(karonte_dir)
     full_scan_json_path = Path(args.full_scan_json)  # pyright:ignore[reportAny]
@@ -92,7 +90,7 @@ def main():
         try:
             k, v = tuple(eval_filter.split('='))  
         except ValueError:
-            eval_log.error('Filter does not have to correct format. See help page.')
+            eval_log.error('Filter does not have the correct format. See help page.')
             exit(1)
         k = k.lower()
         assert k in ('product', 'cve')
@@ -100,6 +98,14 @@ def main():
             evaluation_test_subjects = list(filter(lambda ts: ts.product == v, evaluation_test_subjects))
         if k == 'cve':
             evaluation_test_subjects = list(filter(lambda ts: v in ts.cves, evaluation_test_subjects))
+
+    if not full_scan_json_path.exists():
+        eval_log.debug('CVE-bin-tool seems to be broken due to issues with NVD.')
+        eval_log.debug('As a workaround, we\'ll use an older scan.')
+        template_path = Path('./template-full-scan.json')
+        if not template_path.exists():
+            _ = run(f"gunzip --keep {template_path}.gz", check=True)
+        _ = run(f"sed 's;%PWD%;{Path('.').resolve().absolute()};g' ./template-full-scan.json > {full_scan_json_path}", check=True)
 
     eval_log.info('Reading scans...')
     all_scans = read_scans(karonte_dir, full_scan_json_path, force_rescan=False)
@@ -169,13 +175,13 @@ def main():
                 cfgs = Config.fromPrepareResult(result)
                 jobs.extend(cfgs)
 
-    results = filter(
+    results = list(filter(
         lambda x: x[1] not in (
             JobResult.UNSUPPORTED_PRODUCT,
             JobResult.UNKNOWN_CVE
         ),
         patch_and_test_parallely(jobs)
-    )
+    ))
 
     eval_log.info('Patching and testing finished.')
 
@@ -185,8 +191,8 @@ def main():
         product: str
         results_count: dict[JobResult, int]
 
-    with open('eval-results.json', 'w') as eval_results_file:
-        json.dump(results, eval_results_file)
+    with open(EVAL_RESULTS_PATH, 'w') as eval_results_file:
+        json.dump(list(map(lambda result: {'cfg': asdict(result[0]), 'result': result[1].name}, results)), eval_results_file)
 
     results_by_cve: dict[str, TableEntry] = {}
     eval_log.info('Evaluation:')
@@ -214,6 +220,10 @@ def main():
     eval_log.info('\n' + tabulate(table, headers=('CVE', 'Product', 'Affected', 'Patched', 'Test Passed', 'Percentage')))
 
 if __name__ == '__main__':
+    def mute_print(*_args, **_kwargs):  # pyright:ignore[reportUnknownParameterType,reportMissingParameterType]
+        pass
+    builtins.print = mute_print
+
     try:
         main()
     except Exception as e:

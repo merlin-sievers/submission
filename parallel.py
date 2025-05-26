@@ -11,7 +11,7 @@ def _work(cfg: Config) -> tuple[Config, JobResult]:
     result = karonte_job(cfg)
     return (cfg, result)
 
-def patch_and_test_parallely(cfgs: list[Config]):
+def patch_and_test_parallely(cfgs: list[Config]) -> list[tuple[Config, JobResult]]:
     results: list[tuple[Config, JobResult]] = []
     with multiprocessing.Pool() as pool:
         busy_files: set[str] = set()
