@@ -61,8 +61,6 @@ class Matcher:
 
         # Get all perfect Matches of BasicBlocks from the BinDiffResults
         for tuple in self.bindiff_results.identical_blocks:
-
-            # Make a sanity check here...
             if tuple[0].size != tuple[1].size:
                 continue
 
@@ -84,8 +82,6 @@ class Matcher:
 
 
 class RefMatcher:
-
-    # TODO: Write constructor in a way that it takes the project of the vulnerable and the patched version and gets all the references
     def __init__(self, bindiff_results):
         self.bindiff_results = bindiff_results
         self.match_to_old_address: dict[int, list[Reference]] = dict()
@@ -97,12 +93,8 @@ class RefMatcher:
         self.address_to_refs = dict()
 
     def match_references_from_perfect_matched_blocks(self, perfect_matches, refs_vuln, refs_patch, project_vuln, project_patch, entryPoint, end):
-        # TODO: Match References if they are in a perfectly matched BasicBlock in the Function and outside of the Function
-        # self.bindiff_results = project_vuln.analyses.BinDiff(project_patch)
 
         name_to_thunk_vuln = find_thunks(project_vuln)
-
-        # get got address
         for sec in project_patch.loader.main_object.sections:
             if sec.name == ".got":
                 got_addr = sec.min_addr
@@ -128,7 +120,7 @@ class RefMatcher:
                             for r in refs_patch[ref_patch]:
                                 for v in refs_vuln[block_vuln.instruction_addrs[i]]:
                                     if r.refType == v.refType:
-    # If there already is a control_flow_jump reference to another address overwrite this one. We trust the basic block matching more than the function matching
+
                                         if r.refType == "control_flow_jump":
                                             self.match_to_new_address[r.toAddr] = [v]
                                             self.match_to_old_address[v.toAddr] = [r]
@@ -140,12 +132,9 @@ class RefMatcher:
 
             for ref in refs_patch[ref_patch]:
                 matching = [(t[0],t[1]) for t in self.bindiff_results.function_matches if ref.toAddr == t[1]]
-                #
-
 
                 if matching:
                     new_ref = Reference(ref.fromAddr, matching[0][0], ref.refType)
-# If there already is a control_flow_jump reference to another address use that one. We trust the basic block matching more than the function matching
                     if ref.refType == "control_flow_jump":
                         if ref.toAddr in self.match_to_new_address:
                             pass
@@ -164,7 +153,6 @@ class RefMatcher:
                         self.match_to_old_address.setdefault(got_addr_vuln, []).append(ref)
 
                 if ref.toAddr > got_addr:
-
                     relocations_patch = [reloc for reloc in project_patch.loader.main_object.relocs if reloc.rebased_addr == ref.toAddr]
                     if relocations_patch:
                         relocations_vuln = [reloc for reloc in project_vuln.loader.main_object.relocs if reloc.symbol.name == relocations_patch[0].symbol.name]
@@ -218,7 +206,7 @@ class RefMatcher:
 
         self.address_to_refs = dict()
         xrefs = set()
-        # cfgfast = project.analyses.CFGFast()
+
 
 
 
@@ -252,8 +240,6 @@ class RefMatcher:
                                     self.address_to_refs[fromAddr].append(ref)
 
         refs = project.analyses.XRefs(func=address)
-
-        print("Refs", len(refs.kb.xrefs.xrefs_by_ins_addr), address)
 
         if refs is None:
             return self.address_to_refs

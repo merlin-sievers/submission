@@ -97,24 +97,6 @@ class Config:
                 results.append(cfg)
             except ValueError:
                 pass
-            # version = entry.get("version")
-            # patched_version = entry.get("patched_version")
-            # patched_version = patched_version.get("version")
-            # product = entry.get("product")
-            # cve = entry.get("cve")
-            # instances = entry.get("instances", [])
-            #
-            # for instance in instances:
-            #     results.append({
-            #         "product": product,
-            #         "cve": cve,
-            #         "affected_version": version,
-            #         "patched_version": patched_version,
-            #         "affected_path": instance.get("affected_path"),
-            #         "patched_path": instance.get("patched_path"),
-            #         "toolchain": instance.get("toolchain"),
-            #         "test_dir": instance.get("test_dir")
-            #     })
 
         return results
 

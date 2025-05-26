@@ -27,14 +27,10 @@ class SectionExtender:
         self.additional_size = additional_size
 
     def extend_last_section_of_segment(self):
-        # Load the ELF binary
-        # config = lief.ELF.DYNSYM_COUNT_METHODS.SECTION
         lief.logging.enable()
         lief.logging.set_path("Testsuite/MAGMA/openssl/vuln/log.txt")
         lief.logging.set_level(lief.logging.LEVEL.DEBUG)
-        # config.DYNSYM_COUNT.AUTO = True
-        # config.DYNSYM_COUNT.HASH = True
-        # config.DYNSYM_COUNT.RELOCATIONS = True
+
         binary = lief.parse(self.elf_file)
 
         binary_1 = lief.parse(self.elf_file)
@@ -44,39 +40,24 @@ class SectionExtender:
         # # # Find the specified segment
         segment = next((seg for seg in binary.segments if seg.type == segment_type), None)
         segment_old = next((seg for seg in binary_1.segments if seg.type == segment_type), None)
-        # # if segment is None or len(segment.sections) == 0:
-        #     print(f"No segment of type {segment_type} found.")
-        #     return
-        # #
-        # # # Get the last section of the segment
 
         for section in segment_old.sections:
             if section.name==".rel.plt":
                 relplt_sec = section
             elif section.name == ".rel.dyn":
                 reldyn_sec = section
-        #
+
 
         index = list(binary.segments).index(segment)
-        # # index = 1
-        # #
+
+
         if binary.segments[index + 1].virtual_address - binary.segments[index].virtual_address < self.additional_size:
             print("Load segment and data segment are too close to each other. Cannot extend.")
             return
-        # # Extend the section
-        # # s.size += self.additional_size
-        #
-        #
-        # # Extend the segment
-
 
 
         binary.extend(segment, self.additional_size)
 
-        # # # TODO: Add check that segment can be extended
-        # if binary.segments[index + 1].virtual_address - binary.segments[index].virtual_address < self.additional_size:
-        #     print("Load segment and data segment are too close to each other. Cannot extend.")
-        #     # return
         i = 0
         while  i < len(binary.segments[index].sections):
             binary.segments[index].sections[i].content = binary_1.segments[index].sections[i].content
@@ -98,13 +79,6 @@ class SectionExtender:
             binary.segments[0].sections[i].content = binary_1.segments[0].sections[i].content
             i += 1
 
-        # TODO: Adapt to general case!
-        # for seg in binary.segments:
-        #     seg1 = seg
-        #
-        # seg1 = binary.segments[0]
-        # seg2 = binary.segments[1]
-        #
         segment = next((seg for seg in binary.segments if seg.type ==lief.ELF.Segment.TYPE.GNU_RELRO), None)
         if segment is not None:
             segment.virtual_address = segment.virtual_address - self.additional_size
@@ -121,12 +95,6 @@ class SectionExtender:
         for s in binary.segments[2].sections:
             s.virtual_address = s.virtual_address - self.additional_size
 
-
-        # binary.segments[0].virtual_address = binary.segments[0].virtual_address + self.additional_size
-        # binary.segments[0].physical_address = binary.segments[0].physical_address + self.additional_size
-
-
-        # #
         i= 0
         while i < len(binary.dynamic_entries):
 
@@ -143,11 +111,6 @@ class SectionExtender:
             binary.dynamic_relocations[i].address = binary_1.dynamic_relocations[i].address
             i += 1
 
-        i = 0
-
-        # while i < len(binary.symbols):
-        #     binary.symbols[i].value = binary_1.symbols[i].value
-        #     i += 1
 
         i= 0
         while i < len(binary.relocations):
@@ -159,20 +122,11 @@ class SectionExtender:
         output_file = self.elf_file +"_modified"
         binary.write(output_file)
 
-
-        # binarynew = lief.parse(output_file)
-        # binarynew.write(output_file +"_2")
-
-
-
         return output_file
 
 
     def add_section(self) -> str | None:
         binary = lief.ELF.parse(self.elf_file)
-        # binary1= lief.ELF.parse(self.elf_file)
-        # Create a new section
-
 
         section = [s for s in binary.sections]
         if section == []:
@@ -183,92 +137,6 @@ class SectionExtender:
         new_section.flags = 6
         # Add the new section to the binary
         binary.add(new_section, True)
-        #
-
-        # for i in range(0, len(binary.segments)):
-        #     if i <2:
-        #         seg = binary.segments[i]
-        #         seg1 = binary1.segments[i]
-        #         binary.segments[i].virtual_address = binary1.segments[i].virtual_address
-        #         binary.segments[i].physical_address = binary1.segments[i].physical_address
-        #         binary.segments[i].alignment = binary1.segments[i].alignment
-        #         # binary.segments[i].file_offset = binary1.segments[i].file_offset
-        #         # binary.segments[i].virtual_size = binary1.segments[i].virtual_size
-        #         # binary.segments[i].physical_size = binary1.segments[i].physical_size
-        #         # binary.segments[i].content = binary1.segments[i].content
-        #         for j in range(0, len(binary.segments[i].sections)):
-        #     #         sec = binary.segments[i].sections[j]
-        #     #         sec1 = binary1.segments[i].sections[j]
-        #     #     #     binary.segments[i].sections[j].file_offset = binary1.segments[i].sections[j].file_offset
-        #             binary.segments[i].sections[j].virtual_address = binary1.segments[i].sections[j].virtual_address
-        #     #     #     binary.segments[i].sections[j].offset = binary1.segments[i].sections[j].offset
-        #     #         binary.segments[i].sections[j].content = binary1.segments[i].sections[j].content
-        #     elif i > 2:
-        #     #     seg = binary.segments[i]
-        #     #     seg1 = binary1.segments[i-1]
-        #         binary.segments[i].virtual_address = binary1.segments[i-1].virtual_address
-        #         binary.segments[i].physical_address = binary1.segments[i-1].physical_address
-        #         binary.segments[i].alignment = binary1.segments[i-1].alignment
-        #     #     # binary.segments[i].file_offset = binary1.segments[i-1].file_offset
-        #     #     # binary.segments[i].virtual_size = binary1.segments[i-1].virtual_size
-        #     #     # binary.segments[i].physical_size = binary1.segments[i-1].physical_size
-        #     #     binary.segments[i].content = binary1.segments[i-1].content
-        #         for j in range(0, len(binary.segments[i].sections)):
-        #     #     #     sec = binary.segments[i].sections[j]
-        #     #     #     sec1 = binary1.segments[i-1].sections[j]
-        #     #     #     # # binary.segments[i].sections[j].file_offset = binary1.segments[i-1].sections[j].file_offset
-        #             binary.segments[i].sections[j].virtual_address = binary1.segments[i-1].sections[j].virtual_address
-        #     #     #     # # binary.segments[i].sections[j].offset = binary1.segments[i-1].sections[j].offset
-        #             binary.segments[i].sections[j].content = binary1.segments[i-1].sections[j].content
-        #     #
-        #     # else:
-        #     #     pass
-        # #
-        # # binary.segments[2].virtual_address = binary.segments[2].virtual_address - 4096
-        # # binary.segments[2].physical_address = binary.segments[2].physical_address - 4096
-        # # binary.segments[2].alignment = 4096
-        # # binary.segments[2].file_offset = binary.segments[2].file_offset - 4096
-        # #
-        # binary.segments[0].alignment = 4096
-        # binary.segments[1].alignment = 4096
-        # #
-        # #
-        # #
-        #
-        # i = 0
-        # while i < len(binary.dynamic_entries):
-        #     s = binary.dynamic_entries[i].value
-        #     t = binary1.dynamic_entries[i].value
-        #     entry = binary.dynamic_entries[i]
-        #     entry1 = binary1.dynamic_entries[i]
-        #     # if (entry.tag == lief.ELF.DynamicEntry.TAG.GNU_HASH):
-        #     #     pass
-        #     # else:
-        #     #     binary.dynamic_entries[i].value = binary1.dynamic_entries[i].value
-        #
-        #     i += 1
-        #
-        # i = 0
-        # while i < len(binary.dynamic_symbols):
-        #     binary.dynamic_symbols[i].value = binary1.dynamic_symbols[i].value
-        #     i += 1
-        # #
-        # i = 0
-        # while i < len(binary.dynamic_relocations):
-        #     binary.dynamic_relocations[i].address = binary1.dynamic_relocations[i].address
-        #     i += 1
-        # #
-        # # i = 0
-        # # #
-        # while i < len(binary.symbols):
-        #     binary.symbols[i].value = binary1.symbols[i].value
-        #     i += 1
-        # #
-        # i = 0
-        # while i < len(binary.relocations):
-        #     binary.relocations[i].address = binary1.relocations[i].address
-        #     i += 1
-
 
         output_file = self.elf_file +"_modified"
         # Save the modified binary to disk
@@ -298,13 +166,11 @@ class SectionExtender:
 
         segment_type = (lief.ELF.Segment.TYPE.LOAD)  # Loadable segment
         # Create a new segment
-        # segment = next((seg for seg in binary.segments if seg.type == segment_type), None)
+
         segment = lief.ELF.Segment()
         segment.type = segment_type
         segment.flags = lief.ELF.Segment.FLAGS.R | lief.ELF.Segment.FLAGS.X | lief.ELF.Segment.FLAGS.W # Read & Write
-        # segment.content = [0x90]
-        # Fill with NOPs (4KB)
-        # segment.virtual_address = next_va  # Set next available VA
+
         segment.physical_address = 0x88000  # Typically same as VA
         segment.alignment = 4096  # Page-aligned
         segment.file_offset = 540944
@@ -312,12 +178,6 @@ class SectionExtender:
         segment.virtual_size = 0x1000  #4KB
         binary.add(segment, base=0x1000)
 
-        list = [seg for seg in binary.segments]
-        # for i in range(0, len(list)):
-            # if i < 3:
-            #     binary.segments[i].virtual_address = binary1.segments[i].virtual_address
-            # else:
-            #     binary.segments[i].virtual_address = binary1.segments[i-1].virtual_address
 
         binary.segments[2].virtual_address = 0x88000
         binary.segments[2].flags = lief.ELF.Segment.FLAGS.R | lief.ELF.Segment.FLAGS.X  # Read & Write
@@ -337,8 +197,6 @@ class SectionExtender:
 
     def extend_monolithic_firmware(self):
         binary = lief.parse(self.elf_file)
-
-        binary_1 = lief.parse(self.elf_file)
 
         segment_type = lief.ELF.Segment.TYPE.LOAD  # Type of segment to modify
 
