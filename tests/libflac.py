@@ -1,6 +1,6 @@
 from typing import override
 
-from patched_lib_prepare.util import assert_toolchain_exists
+from patched_lib_prepare.util import assert_toolchain_exists, get_toolchain_sysroot
 from helpers import CVEFunctionInfo
 from patching.configuration import Config
 from tests.unit_test import UnitTest
@@ -25,7 +25,7 @@ class LibFlacUnitTest(UnitTest):
         command = f"cp {self.config.output_path} {self.config.test_binary}"
         if not self.run_command(command, self.config.test_dir):
             return False
-        command = f"QEMU_LD_PREFIX=/home/jaenich/CVE-bin-tool/patched-lib-prepare/toolchains/{self.config.toolchain}/output/host/{self.config.toolchain}/sysroot/ LD_LIBRARY_PATH=$PWD make check"
+        command = f"QEMU_LD_PREFIX={get_toolchain_sysroot(self.config.toolchain)} LD_LIBRARY_PATH=$PWD make check"
         if not self.run_command(command, self.config.test_dir):
             return False
         return True

@@ -1,9 +1,10 @@
 from pathlib import Path
 import subprocess
 
-from helpers import CVEFunctionInfo, get_sysroot
+from helpers import CVEFunctionInfo
 from log import test_log, test_result_log
 from patching.configuration import Config
+from patched_lib_prepare.util import get_firmware_sysroot
 
 class UnitTest:
     EVALUATE_CMD: str = NotImplemented
@@ -15,7 +16,7 @@ class UnitTest:
 
     @property
     def ldprefix(self) -> Path:
-        return get_sysroot(Path(self.config.firmware))
+        return get_firmware_sysroot(Path(self.config.firmware))
 
     def unit_test_patch(self) -> bool:
         raise NotImplementedError

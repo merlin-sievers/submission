@@ -108,6 +108,7 @@ class FunctionPatch(Patching):
             if len(match) > 0:
                 self.entry_point_vuln = match[0]
                 self.end_vuln = self.project_vuln.kb.functions[self.entry_point_vuln].size + self.entry_point_vuln
+                patch_log.warning(f'There are {len(match)} matches! Taking the first one...')
                 patch_log.info("Matched function %s in %s", hex(self.entry_point_vuln), self.patching_config.binary_path)
             else:
                 print(self.patching_config.fn_info.vuln_fn + " not found in binary")

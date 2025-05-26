@@ -58,13 +58,6 @@ evaluation_test_subjects = [
         [
             "CVE-2020-22219",
         ],
-        ''
-    ),
-    TestSubject(
-        'busybox',
-        [
-            "CVE-2021-42386",
-        ],
         'Os'
     ),
 ]
@@ -191,6 +184,9 @@ def main():
         cve: str
         product: str
         results_count: dict[JobResult, int]
+
+    with open('eval-results.json', 'w') as eval_results_file:
+        json.dump(results, eval_results_file)
 
     results_by_cve: dict[str, TableEntry] = {}
     eval_log.info('Evaluation:')
