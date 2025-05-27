@@ -14,13 +14,23 @@
 
 ## ⚙️ How to Use
 
-### 🧪 First Evaluation (Magma)
+### 🧪 First Evaluation (Magma) (work in progress)
 
 To patch binaries from the refined Magma dataset:
 
 ```bash
 python run_magma.py
 ```
+
+Using the unit test of the open-source libraries you can test if the patched binary is still functional (Automation due to dependencies of libraries still work in progress)
+
+Using the Fuzzing Harness of the Magma Dataset (https://github.com/HexHive/magma) and the PoVs collected in 'Testsuite/Magma/extra/...' you can test if the vulnerability has been fixed.
+
+
+
+
+
+
 
 ### 🧪 Second Evaluation (Karonte)
 
