@@ -192,8 +192,13 @@ class FunctionPatch(Patching):
             self.thumb = 1
 
         self.backend = DetourBackend(self.patching_config.binary_path + "_modified")
+        
 
-        new_memory_address = self.backend.project.loader.main_object.segments[2].vaddr
+        if ".patch" in self.backend.project.loader.main_object.sections_map:
+            patch_section = self.backend.project.loader.main_object.sections_map['.patch']
+            new_memory_address = patch_section.vaddr
+        else:
+            new_memory_address = self.backend.project.loader.main_object.segments[2].vaddr
         print("New Memory Address", new_memory_address)
 
 
@@ -236,7 +241,9 @@ class FunctionPatch(Patching):
 
             self.ddg_patch_specific = self.project_patch.analyses.DDG(cfg=self.cfge_patch_specific,
                                                                       start=self.entry_point_patch, call_depth=2)
-
+            
+            if self.ddg_patch_specific.graph.size() <=1:
+                return
             self.new_def_registers = []
             self.used_registers = dict()
 
