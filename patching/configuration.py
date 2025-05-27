@@ -23,7 +23,9 @@ class Config:
     cve: str = ''
     fn_info: CVEFunctionInfo = field(default_factory=lambda: CVEFunctionInfo('',''))
 
-    def readMagmaConfig(self, path, section):
+    @classmethod
+    def readMagmaConfig(cls, path, section):
+        cfg = Config()
         try:
             # Read the configuration file
             config = configparser.ConfigParser()
@@ -31,13 +33,14 @@ class Config:
 
             # Get values from the configuration file
             fn_name = config.get(section, "function.name")
-            self.fn_info = CVEFunctionInfo(
+            cfg.fn_info = CVEFunctionInfo(
                 vuln_fn=fn_name,
                 patch_fn=fn_name
             )
-            self.binary_path = config.get(section, "binary.path")
-            self.patch_path = config.get(section, "patch.path")
-            self.output_path = config.get(section, "output.path")
+            cfg.binary_path = config.get(section, "binary.path")
+            cfg.patch_path = config.get(section, "patch.path")
+            cfg.output_path = config.get(section, "output.path")
+            return cfg
         except configparser.Error as e:
             print("Error reading configuration:", e)
 

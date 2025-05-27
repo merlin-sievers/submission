@@ -1,3 +1,4 @@
+*.cmake
 *.log
 *.txt
 __pycache__/
@@ -5,3 +6,9 @@ uv.lock
 prepare-data/
 karonte/
 karonte_dataset.tar.gz*
+*modified*
+*_patched*
+*.a
+pkgconfig/
+.DS_Store
+*.la

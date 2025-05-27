@@ -37,9 +37,9 @@ def timeout_handler(signum, frame):
 signal.signal(signal.SIGALRM, timeout_handler)
 
 def run_patching(config_path):
-    i = 23
-    while i <= 23:
-        config = Config(config_path, str(i))
+    i = 1
+    while i <= 54:
+        config = Config.readMagmaConfig(config_path, str(i))
 
         # Set the alarm for 20 minutes (1200 seconds)
         signal.alarm(4400)
