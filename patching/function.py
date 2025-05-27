@@ -210,7 +210,7 @@ class FunctionPatch(Patching):
             if (new_memory_address % 4) == (patch % 4):
                 new_memory_address = new_memory_address + 2
 
-        self.jump_to_new_memory(self.start_address_of_patch, new_memory_address, self.patch_start_address_of_patch)
+        self.jump_to_new_memory(self.start_address_of_patch, new_memory_address)
         if self.is_thumb:
             new_memory_address = new_memory_address + 2
         else:

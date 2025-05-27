@@ -343,7 +343,6 @@ class ConstraintSolver:
         self.variables.append(op2)
         if expression.op == "Iop_Add32":
             expr = op1 + op2
-            print("HERE IS ADDItion", expression, op1, op2)
             return expr
         if expression.op == "Iop_CmpNE32":
             expr = op1 - op2
@@ -378,6 +377,7 @@ class ConstraintSolver:
         new_address = expression.con.value + writing_address - self.start_address
 
         if expression.con.value > 20000:
+            expr = z3.BitVecVal(new_address, 32)
             for reg in self.written_registers:
                 if self.written_registers[reg] == expression.con.value:
                     expr = z3.BitVec(str(hex(expression.con.value)), 32)
