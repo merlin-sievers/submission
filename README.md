@@ -20,6 +20,7 @@ To patch binaries from the refined Magma dataset:
 
 ```bash
 python run_magma.py
+```
 
 ### 🧪 Second Evaluation (Karonte)
 
