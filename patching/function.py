@@ -39,6 +39,7 @@ class FunctionPatch(Patching):
             yield f'__real_{original}'
             yield f'{original}.localalias'
             yield f'{original}.alias'
+            yield f'{original}.part.0'
             if search_original:
                 yield original
 
@@ -915,7 +916,7 @@ class FunctionPatch(Patching):
                         target_address = jump_target - ref.fromAddr - 4
                         new_string = self.replace_jump_target_address(instruction, target_address)
                         patch = InlinePatch(ref.fromAddr, new_string, is_thumb=self.is_thumb)
-                    elif instruction.mnemonic not in {"bl", "blx", "b", "bx", "cbz", "cbnz", "b.w"}:
+                    elif instruction.mnemonic not in {"bl", "blx", "b", "bx", "cbz", "cbnz", "b.w", "bls.w", "bne", "bne.w"}:
                         if instruction.size == 2:
                             offset = 0
                             base = 0
@@ -927,6 +928,7 @@ class FunctionPatch(Patching):
                             new_string = instruction.mnemonic + " $+" + str(hex(target_address))
                         else:
                             new_string = instruction.mnemonic + " $" + str(hex(target_address))
+                        print("Debug", new_string)
                         code = self.backend.compile_asm(new_string, base=base, is_thumb=self.is_thumb)
                         patch = RawMemPatch(ref.fromAddr, code)
                     else:

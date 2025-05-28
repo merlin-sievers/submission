@@ -37,8 +37,8 @@ def timeout_handler(signum, frame):
 signal.signal(signal.SIGALRM, timeout_handler)
 
 def run_patching(config_path):
-    i = 25
-    while i <= 38:
+    i = 1
+    while i <= 25:
         config = Config.readMagmaConfig(config_path, str(i))
 
         # Set the alarm for 20 minutes (1200 seconds)
@@ -66,7 +66,7 @@ def run_patching(config_path):
     print("Patching completed successfully")
 
 if __name__ == "__main__":
-    config_path = ["unit-test-O2.properties", "unit-test-O1.properties",  "unit-test-O3.properties"]
+    config_path =  ["unit-test-O2.properties", "unit-test-O3.properties","unit-test-O1.properties"]
     # "unit-test-O2.properties", "unit-test-O1.properties",  "unit-test-O3.properties"]
 
     with multiprocessing.Pool() as pool:
