@@ -174,8 +174,8 @@ class FunctionPatch(Patching):
         self.start_address_of_patch = self.entry_point_vuln
 
         self.code_block_start = self.project_vuln.factory.block(self.start_address_of_patch)
-        self.code_block_end = self.project_vuln.factory.block(max(vulnerable_blocks))
-        # self.code_block_end = self.project_vuln.factory.block(self.end_vuln)
+        #self.code_block_end = self.project_vuln.factory.block(max(vulnerable_blocks))
+        self.code_block_end = self.project_vuln.factory.block(self.end_vuln)
         self.jump_back_address = min(
             [match for match in perfect_matches.match_old_address if match > self.code_block_end.addr], default=None)
 
@@ -387,7 +387,7 @@ class FunctionPatch(Patching):
             self.shifts_ascending[-1].end = self.writing_address
             self.shifts_descending[-1].end = self.writing_address
 
-
+        print("Hallo")
         self.add_possible_magic_values()
 
         self.backend.apply_patches(self.patches)
@@ -916,7 +916,7 @@ class FunctionPatch(Patching):
                         target_address = jump_target - ref.fromAddr - 4
                         new_string = self.replace_jump_target_address(instruction, target_address)
                         patch = InlinePatch(ref.fromAddr, new_string, is_thumb=self.is_thumb)
-                    elif instruction.mnemonic not in {"bl", "blx", "b", "bx", "cbz", "cbnz", "b.w", "bls.w", "bne", "bne.w"}:
+                    elif instruction.mnemonic not in {"bl", "blx", "b", "bx", "cbz", "cbnz", "b.w"}:
                         if instruction.size == 2:
                             offset = 0
                             base = 0
