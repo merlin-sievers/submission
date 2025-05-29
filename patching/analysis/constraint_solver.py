@@ -1,7 +1,7 @@
 import pyvex.stmt
 import z3
 from angr.sim_variable import SimTemporaryVariable
-
+from angr.sim_variable import SimRegisterVariable, SimMemoryVariable
 
 # Assumptions Vex is only in SSA Form inside of a basic block.
 class ConstraintSolver:
@@ -202,13 +202,16 @@ class ConstraintSolver:
                 register = z3.BitVec("t" + str(k) + "b" + str(variable.tmp_id), 32)
                 if register in self.variables:
                     break
-        else:
+        elif isinstance(variable, SimRegisterVariable):
             for k in range(j, -1, -1):
                 register = z3.BitVec("r" + str(k) + "b" + str(variable.reg), 32)
                 if register in self.variables:
                     break
                 else:
                     register = z3.BitVec("r" + str(variable.reg), 32)
+        elif isinstance(variable, SimMemoryVariable):
+            register = self.variables[-1]        
+
 
         if len(self.used_registers) == 0:
             self.used_registers.append(register)
