@@ -101,16 +101,21 @@ def prepare(scans: list[ScanEntry], dynlib_only: bool, compile_flags: str) -> li
     filtered_scan = removed_nopath_scan
 
 
-    def prepare_entry(scan_entry: ScanEntry) -> Result:
+    def prepare_entry(scan_entry: ScanEntry) -> Result | None:
         try:
             builder_class = SUPPORTED_LIBS[scan_entry.product]
         except KeyError:
             raise NotImplementedError(f"No builder implemented for product {scan_entry.product}.")
         preparer = Preparer(scan_entry, builder_class, compile_flags)
-        result: Result = preparer.prepare()
+        try:
+            result: Result = preparer.prepare()
+        except:
+            import traceback
+            l.error(traceback.format_exc())
+            return None
         return result
 
-    prepared_libs = list(filter(lambda e: len(e.instances) > 0, map(prepare_entry, filtered_scan)))
+    prepared_libs = list(filter(lambda e: len(e.instances) > 0, filter(lambda x: x is not None, map(prepare_entry, filtered_scan))))
     return prepared_libs
 
 def read_scans(karonte_dir: Path | None, path: Path, force_rescan: bool) -> list[ScanEntry]:
