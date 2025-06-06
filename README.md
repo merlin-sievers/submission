@@ -16,7 +16,7 @@
 
 
 Requires manual building and patching of the targets.
-Automation of Magma Evaluation is work in progress.
+Automation of this process is currently work in progress.
 
 
 
