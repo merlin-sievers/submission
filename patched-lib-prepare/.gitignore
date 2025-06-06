@@ -1,0 +1,8 @@
+karonte/
+toolchains/
+explorable/
+__pycache__/
+build/
+*.json
+*.tgz
+uv.lock

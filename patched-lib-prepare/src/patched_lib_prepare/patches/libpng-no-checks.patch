@@ -1,0 +1,13 @@
+diff --git a/Makefile.am b/Makefile.am
+index e69519d71..9748d098b 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -355,8 +355,3 @@ if DO_INSTALL_LIBPNG_CONFIG
+ install-exec-hook: install-libpng-config
+ uninstall-hook: uninstall-libpng-config
+ endif
+-
+-# The following addition ensures that 'make all' always builds the test programs
+-# too.  It used to, but some change either in libpng or configure stopped this
+-# working.
+-all-am: $(check_PROGRAMS)

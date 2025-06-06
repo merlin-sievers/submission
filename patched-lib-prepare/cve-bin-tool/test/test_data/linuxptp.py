@@ -1,0 +1,26 @@
+# Copyright (C) 2024 Orange
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+mapping_test_data = [
+    {"product": "linuxptp", "version": "3.1", "version_strings": ["ptp\n3.1"]}
+]
+package_test_data = [
+    {
+        "url": "http://rpmfind.net/linux/fedora/linux/development/rawhide/Everything/aarch64/os/Packages/l/",
+        "package_name": "linuxptp-4.4-2.fc42.aarch64.rpm",
+        "product": "linuxptp",
+        "version": "4.4",
+    },
+    {
+        "url": "http://ftp.debian.org/debian/pool/main/l/linuxptp/",
+        "package_name": "linuxptp_3.1-2.1_amd64.deb",
+        "product": "linuxptp",
+        "version": "3.1",
+    },
+    {
+        "url": "https://downloads.openwrt.org/releases/packages-19.07/x86_64/packages/",
+        "package_name": "linuxptp_2.0-3_x86_64.ipk",
+        "product": "linuxptp",
+        "version": "2.0",
+    },
+]

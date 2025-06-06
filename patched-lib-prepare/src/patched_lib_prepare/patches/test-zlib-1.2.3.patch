@@ -1,0 +1,13 @@
+diff --git a/Makefile b/Makefile
+index 2fd6e45..be1541f 100644
+--- a/Makefile
++++ b/Makefile
+@@ -57,7 +57,7 @@ TEST_OBJS = example.o minigzip.o
+ all: example$(EXE) minigzip$(EXE)
+ 
+ check: test
+-test: all
++test:
+ 	@LD_LIBRARY_PATH=.:$(LD_LIBRARY_PATH) ; export LD_LIBRARY_PATH; \
+ 	echo hello world | ./minigzip | ./minigzip -d || \
+ 	  echo '		*** minigzip test FAILED ***' ; \

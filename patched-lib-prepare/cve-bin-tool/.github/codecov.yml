@@ -1,0 +1,14 @@
+codecov:
+  token: ${{ secrets.CODECOV_TOKEN }}
+  ci:
+    - github-actions
+  max_report_age: 12
+  require_ci_to_pass: TRUE
+
+coverage:
+  round: down
+  range: 60..80
+
+comment:
+    layout: "condensed_header, condensed_files, condensed_footer"
+    hide_project_coverage: FALSE

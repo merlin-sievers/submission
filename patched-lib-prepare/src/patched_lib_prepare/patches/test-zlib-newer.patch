@@ -1,0 +1,20 @@
+--- a/Makefile	2025-05-13 10:49:50.840664567 +0200
++++ b/Makefile	2025-05-13 10:50:04.475861297 +0200
+@@ -83,7 +83,7 @@
+ 
+ check: test
+ 
+-test: all teststatic testshared test64
++test: testshared
+ 
+ teststatic: static
+ 	@TMPST=tmpst_$$; \
+@@ -94,7 +94,7 @@
+ 	fi; \
+ 	rm -f $$TMPST
+ 
+-testshared: shared
++testshared:
+ 	@LD_LIBRARY_PATH=`pwd`:$(LD_LIBRARY_PATH) ; export LD_LIBRARY_PATH; \
+ 	LD_LIBRARYN32_PATH=`pwd`:$(LD_LIBRARYN32_PATH) ; export LD_LIBRARYN32_PATH; \
+ 	DYLD_LIBRARY_PATH=`pwd`:$(DYLD_LIBRARY_PATH) ; export DYLD_LIBRARY_PATH; \

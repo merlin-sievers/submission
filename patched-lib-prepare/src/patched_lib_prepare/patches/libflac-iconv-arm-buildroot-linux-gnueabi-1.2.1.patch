@@ -1,0 +1,15 @@
+diff --git a/configure.in b/configure.in
+index bfa6d8ed..4c587d04 100644
+--- a/configure.in
++++ b/configure.in
+@@ -256,8 +256,8 @@ AH_TEMPLATE(FLAC__HAS_OGG, [define if you have the ogg library])
+ fi
+ 
+ dnl check for i18n(internationalization); these are from libiconv/gettext
+-AM_ICONV
+-AM_LANGINFO_CODESET
++AC_DEFINE([HAVE_ICONV], [], [Whether we have libiconv available]) LIBICONV=""
++AC_SUBST(LIBICONV)
+ 
+ AC_CHECK_PROGS(DOCBOOK_TO_MAN, docbook-to-man docbook2man)
+ AM_CONDITIONAL(FLaC__HAS_DOCBOOK_TO_MAN, test -n "$DOCBOOK_TO_MAN")

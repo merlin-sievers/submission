@@ -1,0 +1,32 @@
+[project]
+name = "patched-lib-prepare"
+version = "0.1.1"
+description = "Tool to prepare patched libs for use with Match & Mend Evaluation"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "basedpyright>=1.29.1",
+    "colorlog>=6.9.0",
+    "cve-bin-tool>=3.4",
+    "gdown>=5.2.0",
+    "gitpython>=3.1.44",
+    "lief",
+    "pydantic>=2.11.3",
+    "pyelftools>=0.30",
+    "tqdm>=4.67.1",
+]
+
+[project.scripts]
+prepare-libs = "patched_lib_prepare.prepare_libs:argv_main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pynvim>=0.5.2",
+]
+
+[tool.uv.sources]
+cve-bin-tool = { path = "cve-bin-tool" }

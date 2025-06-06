@@ -1,0 +1,16 @@
+diff --git a/Makefile.in b/Makefile.in
+index 6ae0c8ad0..144069299 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -1667,11 +1667,6 @@ uninstall-libpng-config:
+ @DO_INSTALL_LIBPNG_CONFIG_TRUE@install-exec-hook: install-libpng-config
+ @DO_INSTALL_LIBPNG_CONFIG_TRUE@uninstall-hook: uninstall-libpng-config
+ 
+-# The following addition ensures that 'make all' always builds the test programs
+-# too.  It used to, but some change either in libpng or configure stopped this
+-# working.
+-all-am: $(check_PROGRAMS)
+-
+ # Tell versions [3.59,3.63) of GNU make to not export all variables.
+ # Otherwise a system limit (for SysV at least) may be exceeded.
+ .NOEXPORT:
