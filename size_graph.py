@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 from dataclasses import asdict
+from math import inf
 from pathlib import Path
 import json
 import logging
+import os
 
 import lief
 import evaluate_karonte
@@ -106,11 +108,11 @@ def plot_file_size_changes(data):
         base_color, extension_color = cve_to_colors[cve]
         total_height = orig_kib + delta_kib
         if total_height <= height_cap:
-            ax.bar(x_val, orig_kib, width=bar_width, color=base_color, edgecolor='black', linewidth=0.3)
-            ax.bar(x_val, delta_kib, width=bar_width, bottom=orig_kib, color=extension_color, edgecolor='black', linewidth=0.3)
+            ax.bar(x_val, orig_kib, width=bar_width, color=base_color, edgecolor='black', linewidth=0.1)
+            ax.bar(x_val, delta_kib, width=bar_width, bottom=orig_kib, color=extension_color, edgecolor='black', linewidth=0.1)
         else:
             base_height = min(orig_kib, height_cap)
-            ax.bar(x_val, base_height, width=bar_width, color=base_color, edgecolor='black', linewidth=0.3)
+            ax.bar(x_val, base_height, width=bar_width, color=base_color, edgecolor='black', linewidth=0.1)
 
             remaining_space = height_cap - base_height
             delta_shown = max(min(delta_kib, remaining_space), 0)
@@ -118,7 +120,7 @@ def plot_file_size_changes(data):
             if delta_kib > delta_shown:
                 cap_height = max(delta_cap_min_height, 2)
                 ax.bar(x_val, cap_height, width=bar_width, bottom=height_cap - cap_height,
-                       color=extension_color, edgecolor='black', linewidth=0.3)
+                       color=extension_color, edgecolor='black', linewidth=0.1)
 
             cut_extension = 0.75
             cut_y = height_cap * 0.95
@@ -162,12 +164,13 @@ def to_unit(n: int, unit: str) -> int:
         'MiB': 1024 * 1024,
     }[unit])
 
-def measure_sizes(config: Config):
-    global last_binary
-    original_size = Path(config.binary_path).stat().st_size
+def get_original_size(config: Config) -> int:
+    return Path(config.binary_path).stat().st_size
+
+def hacky_get_delta(config: Config) -> int:
+    original_size = get_original_size(config)
     patched_size = Path(config.output_path).stat().st_size
     patched_binary = lief.parse(config.output_path)
-    last_binary = patched_binary
     if not patched_binary:
         eval_log.error(f'patched_binary is None for {config.output_path}')
         exit(1)
@@ -191,23 +194,33 @@ def measure_sizes(config: Config):
     stripped_size = len(patch_blob.rstrip(b'\x00'))
     improvable_bloat = patch_raw_size - stripped_size
     assert patch_raw_size == FIXED_PATCH_SIZE
-    return (config, original_size, patched_size - improvable_bloat)
-        # for patched_binary
-    # try:
-    #     pas
-    # except:
-    #     import traceback
-    #     eval_log.error(traceback.format_exc())
-    #     exit(1)
+    delta = patched_size - improvable_bloat - original_size
+    return delta
+
+smallest = inf
+largest = -inf
+
+def measure_sizes(config: Config):
+    global smallest, largest
+    original_size = get_original_size(config)
+    delta = hacky_get_delta(config) if os.environ.get('HACKY_GET_SIZE') else get_delta_from_config(config)
+    if delta > largest:
+        largest = delta
+    if delta < smallest:
+        smallest = delta
+    eval_log.info(f"Patched {config.output_path} has delta of {delta} bytes")
+    return (config, original_size, original_size + delta)
+
+def get_delta_from_config(config: Config) -> int:
+    return config.total_patch_size
 
 if __name__ == '__main__':
     try:
         eval_log.setLevel(logging.INFO)
         data = json.loads(evaluate_karonte.EVAL_RESULTS_PATH.read_text())
+        # sizes = list(map(measure_sizes, map(lambda x: Config(**x['cfg']), filter(lambda x: x['result'] == 'SUCCESS', data))))  # pyright:ignore[reportUnknownArgumentType,reportAny,reportUnknownLambdaType]
         sizes = list(map(measure_sizes, map(lambda x: Config(**x['cfg']), filter(lambda x: x['result'] == 'SUCCESS', data))))  # pyright:ignore[reportUnknownArgumentType,reportAny,reportUnknownLambdaType]
-        # import json
-        # Path('test-output-data.json').write_bytes(json.dumps(sizes))
-        # print(list(filter(lambda x: x[1] > 700, map(lambda x: [asdict(x[0]), to_unit(x[1], "KiB"), to_unit(x[2], "KiB")],sizes))))
+        eval_log.info(f"The size deltas are in the range of {(smallest, largest)}")
         plot_file_size_changes(sizes)
     except:
         import traceback

@@ -105,7 +105,7 @@ def main():
         template_path = Path('./template-full-scan.json')
         if not template_path.exists():
             _ = run(f"gunzip --keep {template_path}.gz", check=True)
-        _ = run(f"sed 's;%PWD%;{Path('.').resolve().absolute()};g' ./template-full-scan.json > {full_scan_json_path}", check=True)
+        _ = run(f"sed 's;%PWD%;{Path('.').resolve().absolute()};g' ./template-full-scan.json > {full_scan_json_path}", check=True, shell=True)
 
     eval_log.info('Reading scans...')
     all_scans = read_scans(karonte_dir, full_scan_json_path, force_rescan=False)

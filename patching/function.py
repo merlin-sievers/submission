@@ -26,13 +26,20 @@ from patching.shifts import Shift
 import time
 import logging
 
-
 class FunctionPatch(Patching):
 
     def __init__(self, patching_config: Config):
         super().__init__(patching_config)
         self.worklist = True
         self.thumb = 0
+
+    def get_patch_size(self, patch: Patch) -> int:
+        if isinstance(patch, InlinePatch):
+            return len(self.backend.compile_asm(patch.new_asm, patch.instruction_addr, self.backend.name_map, patch.is_thumb))
+        elif isinstance(patch, RawMemPatch):
+            return len(patch.data)
+        raise NotImplementedError
+
 
     def try_harder_to_find_symbol(self, project: angr.Project, symbolname: str, search_original: bool = True) -> Symbol | None:
         def symbol_mangler(original: str):
@@ -390,6 +397,9 @@ class FunctionPatch(Patching):
         print("Hallo")
         self.add_possible_magic_values()
 
+        size_of_patches = sum(map(self.get_patch_size, self.patches))
+        patch_log.info(f"Adding {size_of_patches} bytes to patch the function at addr: {self.entry_point_patch}")
+        self.patching_config.total_patch_size += size_of_patches
         self.backend.apply_patches(self.patches)
 
         self.backend.save(self.patching_config.binary_path + "_vuln_test_detoured")

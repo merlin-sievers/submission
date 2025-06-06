@@ -21,6 +21,7 @@ class Config:
     test_binary: str = ''
     toolchain: str = ''
     cve: str = ''
+    total_patch_size: int = 0
     fn_info: CVEFunctionInfo = field(default_factory=lambda: CVEFunctionInfo('',''))
 
     @classmethod
