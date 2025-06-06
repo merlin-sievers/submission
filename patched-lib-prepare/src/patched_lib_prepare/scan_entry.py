@@ -60,7 +60,8 @@ def _try_get_fixed_path(broken_path_str: str) -> Path | None:
     if Path(broken_path_str).is_file():
         return Path(broken_path_str)
     if not ' contains ' in broken_path_str:
-        raise NotImplementedError(f'The file does not exist and it also is not a " contains " string? I don\'t know what to do with this: {broken_path_str}')
+        return None  # for now silently ignore
+        # raise NotImplementedError(f'The file does not exist and it also is not a " contains " string? I don\'t know what to do with this: {broken_path_str}')
     p_parts = broken_path_str.split(' contains ')
     if len(p_parts) != 2:
         raise NotImplementedError(f'Parsing this path is not supported yet: {broken_path_str}')
