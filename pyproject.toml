@@ -39,9 +39,9 @@ dependencies = [
 
 [tool.uv.sources]
 angr-utils = {git = "https://github.com/axt/angr-utils.git", rev="7fd826a16b511727148f727150cea1d7ba6985f5"}
-angr = { git = "https://github.com/sjaenich/angr.git", branch = "plai-patch" }
-patcherex = { git = "https://github.com/sjaenich/patcherex.git"}
 povsim = {git = "https://github.com/mechaphish/povsim.git"}
-lief = {git = "https://github.com/sjaenich/LIEF.git", branch = "plai-patch", subdirectory="api/python/"}
 compilerex = {git ="https://github.com/mechaphish/compilerex.git", rev="6d49822696915b947278030d3f708e2c50078264"}
-patched-lib-prepare = { git = "ssh://git@gitlab.ifi.lmu.de/sievers/patched-lib-prepare.git" }
+angr = { path = "angr" }
+patcherex = { path = "patcherex" }
+lief = { path = "LIEF/api/python" }
+patched-lib-prepare = { path = "patched-lib-prepare" }
