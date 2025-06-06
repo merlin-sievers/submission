@@ -1,0 +1,481 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Generated schema for Root",
+    "type": "object",
+    "properties": {
+        "$schema": {
+            "type": "string"
+        },
+        "metadata": {
+            "type": "object",
+            "properties": {
+                "tool": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "version": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "name",
+                        "version"
+                    ]
+                },
+                "generation_date": {
+                    "type": "string"
+                },
+                "parameter": {
+                    "type": "object",
+                    "properties": {
+                        "options": {
+                            "type": "object",
+                            "properties": {
+                                "help": {},
+                                "exclude": {
+                                    "type": "array",
+                                    "items": {}
+                                },
+                                "version": {},
+                                "disable-version-check": {
+                                    "type": "boolean"
+                                },
+                                "disable-validation-check": {
+                                    "type": "boolean"
+                                },
+                                "offline": {
+                                    "type": "boolean"
+                                },
+                                "detailed": {
+                                    "type": "boolean"
+                                }
+                            },
+                            "required": [
+                                "help",
+                                "exclude",
+                                "version",
+                                "disable-version-check",
+                                "disable-validation-check",
+                                "offline",
+                                "detailed"
+                            ]
+                        },
+                        "cve_data_download": {
+                            "type": "object",
+                            "properties": {
+                                "nvd": {
+                                    "type": "string"
+                                },
+                                "update": {
+                                    "type": "string"
+                                },
+                                "nvd-api-key": {
+                                    "type": "string"
+                                },
+                                "disable-data-source": {
+                                    "type": "array",
+                                    "items": {}
+                                },
+                                "use-mirror": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "nvd",
+                                "update",
+                                "nvd-api-key",
+                                "disable-data-source",
+                                "use-mirror"
+                            ]
+                        },
+                        "input": {
+                            "type": "object",
+                            "properties": {
+                                "directory": {
+                                    "type": "string"
+                                },
+                                "input-file": {
+                                    "type": "string"
+                                },
+                                "triage-input-file": {
+                                    "type": "string"
+                                },
+                                "config": {
+                                    "type": "string"
+                                },
+                                "package-list": {
+                                    "type": "string"
+                                },
+                                "sbom": {
+                                    "type": "string"
+                                },
+                                "sbom-file": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "directory",
+                                "input-file",
+                                "triage-input-file",
+                                "config",
+                                "package-list",
+                                "sbom",
+                                "sbom-file"
+                            ]
+                        },
+                        "output": {
+                            "type": "object",
+                            "properties": {
+                                "quiet": {
+                                    "type": "boolean"
+                                },
+                                "log-level": {
+                                    "type": "string"
+                                },
+                                "output-file": {
+                                    "type": "string"
+                                },
+                                "html-theme": {
+                                    "type": "string"
+                                },
+                                "format": {
+                                    "type": "string"
+                                },
+                                "generate-config": {
+                                    "type": "string"
+                                },
+                                "cvss": {
+                                    "type": "number"
+                                },
+                                "severity": {
+                                    "type": "string"
+                                },
+                                "metrics": {
+                                    "type": "boolean"
+                                },
+                                "epss-percentile": {},
+                                "epss-probability": {},
+                                "no-0-cve-report": {
+                                    "type": "boolean"
+                                },
+                                "available-fix": {
+                                    "type": "string"
+                                },
+                                "backport-fix": {
+                                    "type": "string"
+                                },
+                                "affected-versions": {
+                                    "type": "number"
+                                },
+                                "vex": {
+                                    "type": "string"
+                                },
+                                "sbom-output": {
+                                    "type": "string"
+                                },
+                                "sbom-type": {
+                                    "type": "string"
+                                },
+                                "sbom-format": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "quiet",
+                                "log-level",
+                                "output-file",
+                                "html-theme",
+                                "format",
+                                "generate-config",
+                                "cvss",
+                                "severity",
+                                "metrics",
+                                "epss-percentile",
+                                "epss-probability",
+                                "no-0-cve-report",
+                                "available-fix",
+                                "backport-fix",
+                                "affected-versions",
+                                "vex",
+                                "sbom-output",
+                                "sbom-type",
+                                "sbom-format"
+                            ]
+                        },
+                        "merge_report": {
+                            "type": "object",
+                            "properties": {
+                                "append": {
+                                    "type": "boolean"
+                                },
+                                "tag": {
+                                    "type": "string"
+                                },
+                                "merge": {},
+                                "filter": {
+                                    "type": "array",
+                                    "items": {}
+                                }
+                            },
+                            "required": [
+                                "append",
+                                "tag",
+                                "merge",
+                                "filter"
+                            ]
+                        },
+                        "checkers": {
+                            "type": "object",
+                            "properties": {
+                                "skips": {
+                                    "type": "string"
+                                },
+                                "runs": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "skips",
+                                "runs"
+                            ]
+                        },
+                        "database_management": {
+                            "type": "object",
+                            "properties": {
+                                "import-json": {
+                                    "type": "string"
+                                },
+                                "ignore-sig": {
+                                    "type": "boolean"
+                                },
+                                "log-signature-error": {
+                                    "type": "boolean"
+                                },
+                                "verify": {
+                                    "type": "string"
+                                },
+                                "export-json": {
+                                    "type": "string"
+                                },
+                                "pgp-sign": {
+                                    "type": "string"
+                                },
+                                "passphrase": {
+                                    "type": "string"
+                                },
+                                "export": {
+                                    "type": "string"
+                                },
+                                "import": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "import-json",
+                                "ignore-sig",
+                                "log-signature-error",
+                                "verify",
+                                "export-json",
+                                "pgp-sign",
+                                "passphrase",
+                                "export",
+                                "import"
+                            ]
+                        },
+                        "exploits": {
+                            "type": "object",
+                            "properties": {
+                                "exploits": {
+                                    "type": "boolean"
+                                }
+                            },
+                            "required": [
+                                "exploits"
+                            ]
+                        },
+                        "deprecated": {
+                            "type": "object",
+                            "properties": {
+                                "extract": {
+                                    "type": "boolean"
+                                },
+                                "report": {
+                                    "type": "boolean"
+                                }
+                            },
+                            "required": [
+                                "extract",
+                                "report"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "options",
+                        "cve_data_download",
+                        "input",
+                        "output",
+                        "merge_report",
+                        "checkers",
+                        "database_management",
+                        "exploits",
+                        "deprecated"
+                    ]
+                }
+            },
+            "required": [
+                "tool",
+                "generation_date",
+                "parameter"
+            ]
+        },
+        "database_info": {
+            "type": "object",
+            "properties": {
+                "last_updated": {
+                    "type": "string"
+                },
+                "total_entries": {
+                    "type": "object",
+                    "properties": {
+                        "NVD": {
+                            "type": "number"
+                        },
+                        "OSV": {
+                            "type": "number"
+                        },
+                        "GAD": {
+                            "type": "number"
+                        },
+                        "REDHAT": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "NVD"
+                    ]
+                }
+            },
+            "required": [
+                "last_updated",
+                "total_entries"
+            ]
+        },
+        "vulnerabilities": {
+            "type": "object",
+            "properties": {
+                "summary": {
+                    "type": "object",
+                    "properties": {
+                        "CRITICAL": {
+                            "type": "number"
+                        },
+                        "HIGH": {
+                            "type": "number"
+                        },
+                        "MEDIUM": {
+                            "type": "number"
+                        },
+                        "LOW": {
+                            "type": "number"
+                        },
+                        "UNKNOWN": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "CRITICAL",
+                        "HIGH",
+                        "MEDIUM",
+                        "LOW",
+                        "UNKNOWN"
+                    ]
+                },
+                "report": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "datasource": {
+                                "type": "string"
+                            },
+                            "entries": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "vendor": {
+                                            "type": "string"
+                                        },
+                                        "product": {
+                                            "type": "string"
+                                        },
+                                        "version": {
+                                            "type": "string"
+                                        },
+                                        "cve_number": {
+                                            "type": "string"
+                                        },
+                                        "severity": {
+                                            "type": "string"
+                                        },
+                                        "score": {
+                                            "type": "string"
+                                        },
+                                        "source": {
+                                            "type": "string"
+                                        },
+                                        "cvss_version": {
+                                            "type": "string"
+                                        },
+                                        "cvss_vector": {
+                                            "type": "string"
+                                        },
+                                        "paths": {
+                                            "type": "string"
+                                        },
+                                        "remarks": {
+                                            "type": "string"
+                                        },
+                                        "comments": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "vendor",
+                                        "product",
+                                        "version",
+                                        "cve_number",
+                                        "severity",
+                                        "score",
+                                        "source",
+                                        "cvss_version",
+                                        "cvss_vector",
+                                        "paths",
+                                        "remarks",
+                                        "comments"
+                                    ]
+                                }
+                            }
+                        },
+                        "required": [
+                            "datasource",
+                            "entries"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "summary",
+                "report"
+            ]
+        }
+    },
+    "required": [
+        "$schema",
+        "metadata",
+        "database_info",
+        "vulnerabilities"
+    ]
+}
