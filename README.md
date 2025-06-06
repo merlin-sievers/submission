@@ -12,9 +12,10 @@
 
 ## ⚙️ How to Use
 
-### 🧪 First Evaluation (Magma) (work in progress)
+### 🧪 First Evaluation (Magma)
 
 
+Requires manual building and patching of the targets.
 Automation of Magma Evaluation is work in progress.
 
 
