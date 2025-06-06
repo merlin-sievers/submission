@@ -1,0 +1,13 @@
+angr
+capstone
+keystone-engine
+psutil
+povsim
+compilerex
+shellphish-qemu
+fidget
+pyyaml
+pyelftools
+python-magic
+termcolor
+tracer

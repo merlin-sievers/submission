@@ -1,0 +1,21 @@
+Metadata-Version: 2.4
+Name: patcherex
+Version: 1.2
+Summary: The patcherex
+License-File: LICENSE
+Requires-Dist: angr
+Requires-Dist: capstone
+Requires-Dist: keystone-engine
+Requires-Dist: psutil
+Requires-Dist: povsim
+Requires-Dist: compilerex
+Requires-Dist: shellphish-qemu
+Requires-Dist: fidget
+Requires-Dist: pyyaml
+Requires-Dist: pyelftools
+Requires-Dist: python-magic
+Requires-Dist: termcolor
+Requires-Dist: tracer
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: summary
